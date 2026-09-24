@@ -1,6 +1,7 @@
 import operator
 from typing import Annotated, TypedDict
 
+from app.models.code_finding import CodeFinding
 from app.models.evidence import Evidence
 from app.models.incident import IncidentSnapshot
 from app.models.rca import RCA
@@ -17,5 +18,6 @@ class InvestigationState(TypedDict):
     classification: Classification | None
     evidence: Annotated[list[Evidence], operator.add]  # raw: parallel nodes each append here
     evidence_bundle: list[Evidence]  # final, E1/E2/E3-numbered — set once by fuse_evidence
+    code_findings: list[CodeFinding]
     rca: RCA | None
     errors: Annotated[list[str], operator.add]  # tool failures recorded, not fatal (section 6.4)

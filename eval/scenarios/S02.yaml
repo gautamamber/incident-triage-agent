@@ -19,9 +19,15 @@ setup_sql:
            now() - (random() * interval '30 days')
     FROM generate_series(1, 2000000)
   - "DROP INDEX IF EXISTS ix_payments_customer_id"
-  # 200ms, not the doc's illustrative 2s — calibrated against this actual
-  # environment: ~21ms with the index, ~300ms-1.2s without, measured live.
-  - "ALTER DATABASE payments SET statement_timeout = '200ms'"
+  # 10ms, not the doc's illustrative 2s. Two rounds of miscalibration here:
+  # (1) cold-cache timing (~300ms-1.2s) suggested 200ms was safe, but a warm
+  # cache brought unindexed scans down to ~90-140ms, comfortably under 200ms;
+  # (2) even after lowering to 50ms, the app never tripped at all — turned
+  # out to be a *different* bug entirely (see rebuild_demo_service's
+  # --force-recreate note: a stale container was reusing a connection pool
+  # from before this ALTER DATABASE ever ran). 10ms leaves real margin below
+  # any plausible unindexed scan time, warm or cold.
+  - "ALTER DATABASE payments SET statement_timeout = '10ms'"
 traffic:
   script: traffic/list_customer_payments.py
   duration_seconds: 20

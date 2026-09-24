@@ -60,7 +60,16 @@ def apply_patch(repo_path: Path, patch_path: Path) -> None:
 
 def rebuild_demo_service() -> None:
     _run(["docker", "compose", "build", "demo-payment-service"], cwd=AGENT_DIR)
-    _run(["docker", "compose", "up", "-d", "demo-payment-service"], cwd=AGENT_DIR)
+    # --force-recreate matters: when a scenario has no code patch (S02), the
+    # rebuilt image is byte-identical to the last one, so plain `up -d` sees
+    # "nothing changed" and leaves the OLD container running — with its OLD,
+    # long-lived DB connection pool, silently predating any setup_sql change
+    # (e.g. S02's statement_timeout). Confirmed live: this was the actual
+    # cause of S02 never triggering, not a caching/timing issue.
+    _run(
+        ["docker", "compose", "up", "-d", "--force-recreate", "demo-payment-service"],
+        cwd=AGENT_DIR,
+    )
     for _ in range(30):
         try:
             httpx.get(f"{DEMO_URL}/health", timeout=2).raise_for_status()

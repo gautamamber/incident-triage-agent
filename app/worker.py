@@ -46,6 +46,7 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
             "classification": None,
             "evidence": [],
             "evidence_bundle": [],
+            "code_findings": [],
             "rca": None,
             "errors": [],
         }

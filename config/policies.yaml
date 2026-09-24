@@ -9,3 +9,6 @@ detection:
 severity:
   p1: { error_ratio: 0.05, errors_5m: 50 }
   p2: { error_ratio: 0.01, errors_5m: 10 }
+
+investigation:
+  max_code_tool_calls: 12

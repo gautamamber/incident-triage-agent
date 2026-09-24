@@ -74,3 +74,23 @@ def git_diff(repo_path: Path, sha: str, max_lines: int = MAX_DIFF_LINES) -> str:
     if len(lines) > max_lines:
         lines = lines[:max_lines] + [f"... truncated ({len(lines) - max_lines} more lines)"]
     return "\n".join(lines)
+
+
+def git_blame(repo_path: Path, path: str, start_line: int, end_line: int) -> str:
+    """Line-level commit attribution for one range (doc section 7.2) — who
+    last touched these specific lines, and when."""
+    output = _run_git(
+        repo_path, ["blame", "-L", f"{start_line},{end_line}", "--porcelain", "--", path]
+    )
+    result = []
+    current_sha, current_author = None, None
+    for line in output.splitlines():
+        if line and not line.startswith(("\t", "author", "committer", "summary")):
+            parts = line.split()
+            if len(parts) >= 3 and len(parts[0]) == 40:
+                current_sha = parts[0][:8]
+        elif line.startswith("author "):
+            current_author = line.removeprefix("author ")
+        elif line.startswith("\t"):
+            result.append(f"{current_sha} ({current_author}): {line[1:]}")
+    return "\n".join(result) if result else f"no blame data for {path}:{start_line}-{end_line}"
