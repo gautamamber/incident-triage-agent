@@ -1,0 +1,26 @@
+From 255e25f4b04bc249db4adc00e30ee08d90f2b23a Mon Sep 17 00:00:00 2001
+From: gautamamber <ambergautam1@gmail.com>
+Date: Thu, 24 Sep 2026 16:03:55 +0400
+Subject: [PATCH] Refactor refund lookup (drop redundant existence check)
+
+---
+ app/api/payments.py | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/app/api/payments.py b/app/api/payments.py
+index c5e2b5f..041d5eb 100644
+--- a/app/api/payments.py
++++ b/app/api/payments.py
+@@ -64,9 +64,6 @@ def list_customer_payments(customer_id: str, db: Session = Depends(get_db)):
+ @router.post("/payments/{payment_id}/refund", response_model=PaymentOut)
+ def refund_payment(payment_id: str, db: Session = Depends(get_db)):
+     payment = db.get(Payment, payment_id)
+-    if payment is None:
+-        logger.warning("Payment not found: %s", payment_id)
+-        raise HTTPException(status_code=404, detail="Payment not found")
+     payment.status = "refunded"
+     db.commit()
+     db.refresh(payment)
+-- 
+2.39.5 (Apple Git-154)
+

@@ -1,0 +1,15 @@
+# Section 15.2 of the architecture doc. `repository` would be a GitHub URL in
+# production; since the demo repo isn't pushed to GitHub yet (Phase 0 decision),
+# `local_path` points at the clone on disk instead. repo_registry.py reads
+# whichever one is set.
+services:
+  payment-service:
+    repository: null
+    local_path: ../demo-payment-service
+    branch: main
+    language: python
+    owner: payments
+    critical_routes:
+      - "POST /payments"
+      - "GET /payments/{payment_id}"
+    fix_allowed: true

@@ -1,0 +1,11 @@
+detection:
+  poll_seconds: 30
+  window_minutes: 5
+  min_occurrences: 5
+  resolve_after_minutes: 30
+  cooldown_minutes: 120
+  always_page_exceptions: ["MemoryError"]
+
+severity:
+  p1: { error_ratio: 0.05, errors_5m: 50 }
+  p2: { error_ratio: 0.01, errors_5m: 10 }
