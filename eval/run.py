@@ -5,6 +5,7 @@ find it -> let the worker investigate it -> compare against the expected answer.
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -26,6 +27,10 @@ AGENT_DIR = EVAL_DIR.parent
 SERVICE_NAME = "payment-service"
 DEMO_URL = "http://127.0.0.1:8800"
 SCENARIO_BRANCH = "eval-scenario"
+SERVICE_HEALTH_URLS = {
+    "demo-payment-service": f"{DEMO_URL}/health",
+    "fraud-mock": "http://127.0.0.1:8010/health",
+}
 # Eval-only tooling talking directly to the demo service's own database —
 # not something app code needs, so it's not worth a shared settings field.
 PAYMENTS_DB_URL = "postgresql+psycopg://agent:agent@127.0.0.1:55432/payments"
@@ -77,6 +82,34 @@ def rebuild_demo_service() -> None:
         except Exception:
             time.sleep(1)
     raise RuntimeError("demo-payment-service never became healthy")
+
+
+def set_service_env(service: str, env: dict[str, str]) -> None:
+    """Recreates one Compose service with these values available for its
+    ${VAR:-default} interpolation (S04 uses this for fraud-mock's latency).
+    Same --force-recreate necessity as rebuild_demo_service and the same
+    reason: an unchanged image means plain `up -d` won't restart an
+    already-running container, so it would never pick up the new env."""
+    env_full = {**os.environ, **env}
+    result = subprocess.run(
+        ["docker", "compose", "up", "-d", "--force-recreate", service],
+        cwd=AGENT_DIR,
+        env=env_full,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"set_service_env({service}) failed:\n{result.stderr}")
+
+    health_url = SERVICE_HEALTH_URLS.get(service)
+    if health_url:
+        for _ in range(30):
+            try:
+                httpx.get(health_url, timeout=2).raise_for_status()
+                return
+            except Exception:
+                time.sleep(1)
+        raise RuntimeError(f"{service} never became healthy after env override")
 
 
 def reset_agent_db() -> None:
@@ -189,6 +222,10 @@ def run_scenario(scenario_path: Path) -> dict:
 
         rebuild_demo_service()
 
+        if scenario.get("env_override"):
+            for service, env in scenario["env_override"].items():
+                set_service_env(service, env)
+
         traffic = scenario["traffic"]
         run_traffic(traffic["script"], traffic["duration_seconds"], traffic["rps"])
 
@@ -219,6 +256,12 @@ def run_scenario(scenario_path: Path) -> dict:
                 run_payments_sql(scenario["teardown_sql"])
             except Exception as exc:
                 print(f"  WARNING: teardown_sql failed: {exc}")
+        if scenario.get("env_override"):
+            for service in scenario["env_override"]:
+                try:
+                    set_service_env(service, {})  # {} -> falls back to the compose default
+                except Exception as exc:
+                    print(f"  WARNING: resetting env for {service} failed: {exc}")
         try:
             reset_demo_repo(repo_path)
         except Exception as exc:

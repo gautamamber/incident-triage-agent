@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
@@ -28,7 +28,10 @@ def checkpointer_conn_string() -> str:
 def init_db() -> None:
     from langgraph.checkpoint.postgres import PostgresSaver
 
-    from app.models import incident  # noqa: F401 — import registers the tables on Base
+    from app.models import incident, knowledge_document  # noqa: F401 — registers tables on Base
+
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
     Base.metadata.create_all(bind=engine)
 

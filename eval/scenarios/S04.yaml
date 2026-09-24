@@ -1,0 +1,22 @@
+# No `inject` — this is a pure infra change (fraud-mock gets slow), not an
+# application code commit, matching doc's own description: "dependency
+# timeout... NO_CODE_FIX (alert only)". Exercises the case where the trace
+# clearly shows the time is spent in a DOWNSTREAM call, not in this
+# service's own code or database.
+id: S04
+description: Downstream dependency (fraud-mock) latency causes ReadTimeout on payment creation
+inject: null
+env_override:
+  fraud-mock:
+    FRAUD_MOCK_LATENCY_MS: "6000"  # exceeds payments.py's httpx timeout=5 on the fraud-mock call
+traffic:
+  script: traffic/create_payments.py
+  # Each request now blocks ~5s (payments.py's httpx timeout on the fraud-mock
+  # call) before failing — same "slow-per-request needs longer duration to
+  # cross the detector's 5-occurrence threshold" lesson as S02/S03.
+  duration_seconds: 45
+  rps: 3
+expected:
+  incident_count: 1
+  category: [DEPENDENCY]
+  min_evidence_ids: 2

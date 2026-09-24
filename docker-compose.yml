@@ -23,7 +23,10 @@ services:
       dockerfile: Dockerfile.fraud-mock
     restart: unless-stopped
     environment:
-      FRAUD_MOCK_LATENCY_MS: "50"
+      # ${VAR:-default} interpolation: the eval harness can override this per
+      # scenario (S04) by setting FRAUD_MOCK_LATENCY_MS in its own subprocess
+      # environment before `docker compose up -d --force-recreate fraud-mock`.
+      FRAUD_MOCK_LATENCY_MS: ${FRAUD_MOCK_LATENCY_MS:-50}
       FRAUD_MOCK_FAILURE_RATE: "0"
     ports:
       - "127.0.0.1:8010:8010"

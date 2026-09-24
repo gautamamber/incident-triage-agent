@@ -1,5 +1,6 @@
 from app.agents.state import InvestigationState
-from app.knowledge import search_knowledge
+from app.db import SessionLocal
+from app.knowledge import hybrid_search
 from app.models.evidence import Evidence
 
 
@@ -18,7 +19,12 @@ def retrieve_knowledge(state: InvestigationState) -> dict:
         ]
     )
 
-    hits = search_knowledge(query)
+    db = SessionLocal()
+    try:
+        hits = hybrid_search(db, query)
+    finally:
+        db.close()
+
     bundle = state["evidence_bundle"]
     new_evidence = [
         Evidence(

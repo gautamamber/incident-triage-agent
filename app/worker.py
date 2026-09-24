@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.graph import build_graph
 from app.db import SessionLocal, checkpointer_conn_string, init_db
+from app.knowledge import reindex_knowledge
 from app.models.confidence import ConfidenceScore
 from app.models.incident import Incident, IncidentSnapshot, IncidentStatus
 from app.models.rca import RCA
@@ -47,8 +48,13 @@ def _write_knowledge_draft(
     back in Phase 1."""
     KNOWLEDGE_INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
     causal_chain = "\n".join(f"- {step}" for step in rca.causal_chain)
+    # A short title, not the full root_cause sentence — this becomes the H1
+    # heading AND (via _load_documents' "first line, minus '#'" rule) the
+    # title stored in knowledge_documents. The full explanation still lives
+    # in full under "## Root cause" just below.
+    short_title = rca.root_cause if len(rca.root_cause) <= 80 else rca.root_cause[:77] + "..."
     content = (
-        f"# {incident.key}: {rca.root_cause}\n\n"
+        f"# {incident.key}: {short_title}\n\n"
         f"**Service:** {incident.service}\n"
         f"**Category:** {rca.category.value}\n"
         f"**Exception:** {incident.exception_type}\n"
@@ -111,6 +117,7 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
 
     if rca:
         _write_knowledge_draft(snapshot, rca, confidence)
+        reindex_knowledge(db)  # so this incident is vector-searchable next time
 
     print(f"[worker] {incident.key} -> {incident.status}")
     if result.get("errors"):
