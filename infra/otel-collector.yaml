@@ -1,0 +1,71 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+  # Grafana's Loki "derived field" link (infra/grafana/provisioning/datasources)
+  # regex-matches the LOG LINE TEXT, not structured metadata. trace_id/span_id
+  # arrive as structured metadata (correct per section 4.2's cardinality rule —
+  # they must never become Loki labels), so without this, no log line's text
+  # ever contains "trace_id=..." and the derived field never has anything to
+  # match. This appends it to the body so the click-through link works, while
+  # leaving the structured-metadata trace_id field (used for LogQL filtering)
+  # untouched.
+  transform/log_body_trace_id:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - set(body, Concat([body, " trace_id=", trace_id.string], ""))
+            where trace_id.string != "00000000000000000000000000000000"
+
+  redaction:
+    allow_all_keys: true
+    blocked_values:
+      # card numbers: 13-19 digits at a word boundary. \b (not lookaround — this
+      # processor's regex engine is RE2, which has no lookaround support at all)
+      # treats letters and digits both as "word" characters, so it won't fire in the
+      # middle of a continuous hex string like a trace_id/span_id, only at genuine
+      # token edges (quotes, spaces, punctuation) where a real card number would sit.
+      # Still not a real Luhn check — that's the second redaction pass in
+      # security/redaction.py before any LLM call (architecture doc section 11.3).
+      - '\b[0-9]{13,19}\b'
+      - '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'  # emails
+      - 'Bearer [A-Za-z0-9\-_.]+'              # bearer tokens / JWTs
+      - '(sk-|ghp_|github_pat_|xox|AKIA)[A-Za-z0-9_-]+'   # known API key prefixes
+    summary: debug
+
+exporters:
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  prometheus:
+    endpoint: 0.0.0.0:8889
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [transform/log_body_trace_id, redaction, batch]
+      exporters: [otlphttp/loki]
+    traces:
+      receivers: [otlp]
+      processors: [redaction, batch]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]

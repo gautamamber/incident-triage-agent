@@ -48,6 +48,7 @@ This document is the source of truth for the build. The original idea document (
 | Approval step | The agent opens a **draft PR**. PR review is the human approval. `main` is branch-protected. |
 | Deployment tracking | **Not included.** No Kubernetes, ArgoCD, or deployment records. Recent **git commits** (with timestamps) are the change signal. |
 | Observability stack | Open source only: OpenTelemetry, Loki, Tempo, Prometheus, Grafana. |
+| Where things run | Everything runs locally **except three external services: hosted LLM API, GitHub, Slack** (section 15.6). |
 | Telemetry transport | An **OpenTelemetry Collector** receives logs, traces and metrics from the demo service and fans them out. |
 | State / queue | PostgreSQL only (incidents, job queue, LangGraph checkpoints, later pgvector). **No Redis.** |
 | RAG | Start with runbooks loaded directly / keyword search. Add pgvector when the knowledge base grows. |
@@ -56,6 +57,14 @@ This document is the source of truth for the build. The original idea document (
 | Evaluation | Moved from V4 to the first phases. |
 | Fix validation | Reproducing test must fail before the patch and pass after; full suite and lint must pass; runs in a sandbox. |
 | Revert as a fix | If a single recent commit introduced the problem, a **git revert** is the first fix candidate (deterministic, no LLM patch). |
+| Field/metric names | Not hard-coded up front. Confirmed against real Grafana output in Phase 1, recorded in `config/metrics.yaml`. Every LogQL/PromQL query in code reads names from that file, never a literal string. |
+| Investigation concurrency | Worker acquires a Postgres **advisory lock keyed by `incident_id`** before invoking the graph; LangGraph checkpointer `thread_id = incident_id`. The lock is session-scoped, so a crashed worker releases it automatically and a restarted worker reclaims the incident and resumes from the last checkpoint (section 6.5). |
+| Code investigation language scope | Python `ast` only, matching the demo repo. Multi-language support (tree-sitter) is explicitly deferred until a non-Python demo service exists — not a gap, a scope boundary (section 17). |
+| Confidence weights | Shipped as defaults in `policies.yaml`, not final. Phase 6 adds a calibration step that adjusts them against eval harness results; the chosen weights are committed with a comment referencing the eval report that justified them (section 8.3). |
+| DB-migration-only fixes | `fix_strategy` is finalized in **code**, not trusted from the LLM: the `route` node overrides any LLM-proposed `CODE_CHANGE`/`REVERT_COMMIT` to `NO_CODE_FIX` whenever the only viable fix touches schema, migrations, or infra outside the diff policy allowlist (section 8.2). |
+| Service → repo mapping | Deliberately 1:1 in `services.yaml` for this project. Multi-repo / cross-service correlation stays out of scope (section 17), so `repo_registry.py` is not built to generalize beyond it. |
+| Sandbox runner image | Built once per repo-lockfile hash via `sandbox/build.sh`. The worker checks for an image tagged with the current lockfile hash before the first sandbox run of a session and builds it if missing (section 11.4). |
+| `AGENT_MODE` enforcement | Not just an env read in a prompt. The `route` node checks it in code before entering the fix subgraph, and a unit test asserts `AGENT_MODE=rca` can never reach `create_draft_pr` (section 9.1). |
 
 ---
 
@@ -263,6 +272,15 @@ Rules:
 - A recurrence within `COOLDOWN` (default 2 h) reopens the same incident instead of creating a new one.
 - Only one investigation per incident at a time (Postgres advisory lock / `SELECT ... FOR UPDATE SKIP LOCKED`).
 
+### 5.4.1 Concurrency and resume (worker ↔ LangGraph checkpointer)
+
+`limits.concurrent_runs` (default 2) means up to 2 **different incidents** run at once, each on its own worker task — never 2 runs on the same incident.
+
+- On claim, the worker opens a dedicated connection and takes `pg_advisory_lock(hash(incident_id))`. This is **session-scoped**: if the worker process dies, Postgres releases the lock when the connection drops. No manual cleanup needed.
+- The LangGraph Postgres checkpointer uses `thread_id = incident_id`, so every node's state after every step is durable, independent of the advisory lock.
+- Restart path: a poller notices incidents stuck in `INVESTIGATING` with no active lock holder, re-claims them, re-acquires the lock, and resumes the graph from its last checkpoint — it does not restart from `load_context`.
+- Two workers racing for the same incident: the loser's `pg_advisory_lock` call blocks (or `pg_try_advisory_lock` returns false, depending on implementation choice made in Phase 8), so it skips the claim and moves to the next queued incident.
+
 ### 5.5 Severity (deterministic)
 
 Computed from Prometheus and occurrence data at open time and re-evaluated on update:
@@ -383,6 +401,8 @@ Categories: `DATABASE`, `API`, `NETWORK`, `MEMORY`, `CPU`, `DEPENDENCY`, `APPLIC
 
 All tools are typed Python functions with Pydantic inputs and outputs. Tools used by the LLM in the agent loop are a small, read-only subset.
 
+**Language scope:** `find_function` and `find_references` parse the target repo with Python's `ast` module — this only works because the demo repo is Python. This is a fixed assumption for the life of this project, not a gap to fix later; a second demo service in another language would need a tree-sitter-based rewrite of these two tools, deliberately deferred (section 17).
+
 ### 7.1 Observability tools
 
 | Tool | Returns (computed facts, not raw dumps) |
@@ -481,6 +501,12 @@ Prompt requirements for the RCA step:
 - The model must distinguish a **behavior change** (what the code returns) from a **performance change** (how fast). Example: changing `WHERE id = ?` to `WHERE customer_id = ? ORDER BY created_at DESC` changes the result set. The correct fix is a revert, not "add an index".
 - If one recent commit clearly introduced the problem, prefer `REVERT_COMMIT`.
 
+**`fix_strategy` is not trusted as the LLM wrote it.** The `route` node re-checks it in code after the RCA step:
+
+- If `recommended_action` or `root_cause` implies a schema change, an index, a migration, a config value outside `policies.yaml`'s allowed paths, or any infra change — the node forces `fix_strategy = NO_CODE_FIX`, overriding whatever the LLM set. This is a keyword/heuristic check in Phase 5, tightened using eval results from Phase 6 onward.
+- Only `REVERT_COMMIT` (SHA must exist in git evidence) and `CODE_CHANGE` (diff confined to `app/**`, `tests/**`) can ever reach the fix subgraph. Everything else routes to RCA-only or needs-human, never to a patch attempt.
+- This keeps scenarios like S02 (missing index) deterministic: the agent never tries to write a migration it cannot safely validate.
+
 ### 8.3 Confidence score (deterministic)
 
 | Signal | Weight | Condition |
@@ -504,6 +530,14 @@ Score is clamped to `[0, 1]`.
 
 Weights and thresholds are **calibrated using the evaluation harness** (section 12), not guessed once.
 
+### 8.3.1 Calibration procedure
+
+1. Ship the table above as defaults in `config/policies.yaml` starting Phase 5 — good enough to unblock the pipeline, not treated as final.
+2. From Phase 6 onward, every `eval/run.py` pass records, per scenario: computed confidence, correctness (did the RCA/fix match `expected`), and which signals fired.
+3. After a scenario batch, manually or via a small grid search adjust weights so that: every scenario expected to be "High" band is correct, and no scenario expected "Low" band scores High (a false-high is worse than a false-low — it can trigger an unwanted fix attempt).
+4. Record the change as a normal commit to `policies.yaml` with a message referencing the `eval/reports/` file that justified it. No separate calibration store — git history is the audit trail.
+5. Re-run the full eval suite after any weight change before it's considered accepted.
+
 ---
 
 ## 9. Fix workflow and draft PR
@@ -515,6 +549,8 @@ Weights and thresholds are **calibrated using the evaluation harness** (section 
 - `fix_strategy` is `REVERT_COMMIT` or `CODE_CHANGE`.
 - Service is on the fix allowlist in `policies.yaml`.
 - No open agent PR already exists for this incident (otherwise update it).
+
+**Enforcement point:** these are not just prompt context — the `route` node reads `settings.AGENT_MODE` directly from the typed settings object (not from anything the LLM produced) and is the *only* code path that can add the `fix` edge to the graph. `observe` and `rca` modes never register the fix subgraph as a reachable node at all, so there is no conditional to misconfigure at runtime. A unit test asserts that with `AGENT_MODE=rca`, `create_draft_pr` is never invoked even when confidence is artificially forced to High. Full RBAC (who can flip `AGENT_MODE`, audit of the change) is out of scope for this single-dev local project and stays deferred to Phase 11+ (section 17).
 
 ### 9.2 Fix subgraph
 
@@ -647,6 +683,8 @@ docker run --rm \
 - Hard timeout (default 300 s).
 - **Do not mount the Docker socket into any container.** During development the worker runs on the host and launches sandbox containers directly. If the worker is containerized later, use rootless Docker or a dedicated runner with a minimal API.
 
+**Image build trigger:** the tag `incident-agent-runner:<repo-lock-hash>` is a content hash of the demo repo's lockfile (`uv.lock` / `poetry.lock`), computed in code before the first sandbox call of a run. Before `run_in_sandbox` executes, the worker checks `docker images` for that tag; if absent, it runs `sandbox/build.sh <repo-lock-hash>` (a thin wrapper around `docker build`) synchronously, then proceeds. This keeps the image always in sync with the exact dependency set being tested, with no separate CI step to remember, at the cost of a one-time build delay the first time a lockfile changes.
+
 ### 11.5 Diff policy (`security/diff_policy.py`)
 
 A patch is rejected if it:
@@ -704,7 +742,7 @@ Each bug is introduced as a **real commit** in the demo repo, so git history inv
 | ID | Scenario | Injection | Expected category | Expected fix |
 |---|---|---|---|---|
 | S01 | Unhandled `None` → `AttributeError` → 500 | Remove a null check in the service layer | APPLICATION | Code change (restore check) |
-| S02 | Slow query from missing index | Drop index; 2M seeded rows; `statement_timeout=2s` so slowness becomes errors | DATABASE | Code/migration change (flagged, may be NO_CODE_FIX) |
+| S02 | Slow query from missing index | Drop index; 2M seeded rows; `statement_timeout=2s` so slowness becomes errors | DATABASE | **NO_CODE_FIX** (forced by the route-node override in 8.2 — fix requires a migration, outside diff policy) |
 | S03 | Connection pool exhaustion | Session not closed on an error path | DATABASE | Code change (context manager) |
 | S04 | Downstream dependency timeout | `fraud-mock` latency set to 5 s | DEPENDENCY | NO_CODE_FIX (alert only) |
 | S05 | Query behavior change | `WHERE id = ?` → `WHERE customer_id = ?` | APPLICATION / DATABASE | REVERT_COMMIT |
@@ -905,6 +943,8 @@ The agent (API 8001, detector, worker) runs on the host with `uv run` during dev
 
 ### 15.2 `config/services.yaml`
 
+One entry maps one `service.name` to exactly one repo. This is a deliberate scope limit, not a placeholder for multi-repo lookup — `repo_registry.py` does not need to support a service resolving to several repos, or a repo backing several services, until cross-service correlation is in scope (section 17).
+
 ```yaml
 services:
   payment-service:
@@ -961,6 +1001,7 @@ LLM_MODEL_FAST=
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 GITHUB_TOKEN=
+GITHUB_REPO=<owner>/demo-payment-service
 SLACK_WEBHOOK_URL=
 LOKI_URL=http://127.0.0.1:3100
 TEMPO_URL=http://127.0.0.1:3200
@@ -987,6 +1028,48 @@ LANGSMITH_TRACING=false
 | Tests / lint | pytest, ruff |
 | Notifications | Slack incoming webhook |
 
+### 15.6 Local vs external services
+
+Everything runs on the local machine except three external services. The agent only makes outbound calls to them; nothing is deployed to the cloud.
+
+| Runs locally | External (outbound calls only) |
+|---|---|
+| Demo service, fraud-mock, Postgres, OTel Collector, Loki, Tempo, Prometheus, Grafana (Docker Compose) | **LLM API** (OpenAI or Anthropic) |
+| Agent detector, worker, API, LangGraph (host, `uv run`) | **GitHub** (demo repo, agent branches, draft PRs) |
+| Repo clones, worktrees, sandbox containers, knowledge base, eval harness | **Slack** (incident alerts via incoming webhook) |
+
+LangSmith is a possible fourth external service but stays **off** (`LANGSMITH_TRACING=false`).
+
+#### What leaves the machine
+
+| Service | Data sent | Protection |
+|---|---|---|
+| LLM API | Redacted evidence, code snippets from the demo repo, prompts | Redaction (11.3), untrusted-data wrapping (11.2), token budgets (11.7) |
+| GitHub | Agent branch commits, draft PR title and body | Diff policy (11.5), redacted PR body, branch protection (9.5) |
+| Slack | Templated alert message | Redacted and escaped fields, no LLM-generated mentions |
+
+#### Credentials
+
+| Variable | Service | Setup | Least-privilege scope |
+|---|---|---|---|
+| `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` | LLM | Create a **project-specific key** | Monthly spend limit set in the provider dashboard |
+| `LLM_MODEL_STRONG`, `LLM_MODEL_FAST` | LLM | Model names for RCA/code/patch and for the classify fallback | — |
+| `GITHUB_TOKEN` | GitHub | **Fine-grained personal access token** | Only the `demo-payment-service` repo; **Contents: read/write**, **Pull requests: read/write**, **Metadata: read**; short expiry (e.g. 90 days) |
+| `GITHUB_REPO` | GitHub | `<owner>/demo-payment-service` | — |
+| `SLACK_WEBHOOK_URL` | Slack | Incoming webhook bound to one dedicated channel (e.g. `#incidents-demo`) | Can only post to that channel |
+
+Rules:
+
+- Credentials live only in `.env`, which is git-ignored. `.env.example` lists the keys without values.
+- Never paste credentials into chat, code, commits, issues or PR bodies.
+- The agent loads credentials through its settings object and never logs them; its logs pass through redaction.
+- Credentials are never passed into sandbox containers.
+- Rotate the GitHub token and LLM key if they are ever exposed; the webhook URL is a secret too.
+
+#### Provider abstraction
+
+LLM access goes through one factory keyed on `LLM_PROVIDER`, so switching between OpenAI and Anthropic (or a local Ollama model later) is a configuration change. The eval harness compares providers on the same scenarios.
+
 ---
 
 ## 16. Step-by-step build plan
@@ -996,8 +1079,8 @@ Each phase has a learning goal, a deliverable, and a "done when" check. Do not s
 ### Phase 0 — Project foundations
 
 - **Learn:** `uv` projects, settings via Pydantic, Docker Compose basics, pre-commit.
-- **Build:** both repos, `pyproject.toml`, `.env.example`, `.gitignore`, ruff + pytest, empty Compose with Postgres.
-- **Done when:** `uv run pytest` passes, `docker compose up postgres` works, secrets are only in `.env`.
+- **Build:** both repos (demo repo pushed to GitHub with branch protection on `main`), `pyproject.toml`, `.env.example`, `.gitignore`, ruff + pytest, empty Compose with Postgres, and a credentials check command `uv run python -m app.check_credentials` that makes one harmless call per service: list models (LLM), read repo metadata (GitHub), post a test message (Slack). It prints only pass/fail, never the secrets.
+- **Done when:** `uv run pytest` passes, `docker compose up postgres` works, the credentials check passes for all three services, and secrets are only in `.env`.
 
 ### Phase 1 — Observable demo service
 

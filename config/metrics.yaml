@@ -1,0 +1,9 @@
+# Confirmed against real Prometheus output in Phase 1 (opentelemetry-instrumentation-fastapi
+# 0.65b0 / -httpx 0.65b0, September 2026). Query code must read names from here, never
+# hard-code a literal metric name — these change across instrumentation library versions.
+
+payment-service:
+  http_server_duration_ms: http_server_duration_milliseconds_bucket
+  http_server_active_requests: http_server_active_requests
+  http_client_duration_ms: http_client_duration_milliseconds_bucket   # outbound calls, e.g. to fraud-mock
+  db_client_connections_usage: db_client_connections_usage             # pool in-use/idle gauge, for S03 (pool exhaustion)
