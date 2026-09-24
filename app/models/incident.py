@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 
 from pydantic import BaseModel
-from sqlalchemy import BigInteger, DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, Float, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,6 +42,8 @@ class Incident(Base):
 
     category: Mapped[str | None] = mapped_column(String(20), nullable=True)
     rca_json: Mapped[str | None] = mapped_column(String, nullable=True)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_band: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     @property
     def key(self) -> str:

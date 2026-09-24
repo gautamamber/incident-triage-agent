@@ -1,3 +1,4 @@
+from app.agents.nodes.route import fix_eligibility
 from app.agents.state import InvestigationState
 from app.notify.slack import post_slack
 from app.security.redaction import redact
@@ -7,6 +8,7 @@ def build_message(state: InvestigationState) -> str:
     incident = state["incident"]
     rca = state.get("rca")
     classification = state.get("classification") or {}
+    confidence = state.get("confidence")
 
     if rca is None:
         lines = [
@@ -19,22 +21,43 @@ def build_message(state: InvestigationState) -> str:
         ]
         return redact("\n".join(lines))
 
-    evidence_ids = ", ".join(rca.evidence_ids)
+    is_needs_human = confidence is not None and confidence.band == "low"
+    icon = "🚑" if is_needs_human else "🔎"
+
     lines = [
-        f"🔎 {incident.severity} Incident {incident.key} — {incident.service}",
+        f"{icon} {incident.severity} Incident {incident.key} — {incident.service}",
         "",
         f"Error:        {incident.normalized_message} ({incident.exception_type})",
         f"Occurrences:  {incident.error_count}   First seen: {incident.first_seen}",
         f"Category:     {classification.get('category', 'UNKNOWN')}",
+    ]
+    if confidence is not None:
+        fired = ", ".join(f"{k}={v:+.2f}" for k, v in confidence.signals.items() if v != 0)
+        lines.append(
+            f"Confidence:   {confidence.score} ({confidence.band}) — {fired or 'no signals fired'}"
+        )
+    lines += [
         "",
         f"RCA:          {rca.root_cause}",
         f"Action:       {rca.recommended_action}",
-        f"Evidence:     {evidence_ids}",
+        f"Evidence:     {', '.join(rca.evidence_ids)}",
     ]
     if rca.suspect_commit:
         lines.append(f"Suspect commit: {rca.suspect_commit}")
+    if rca.unknowns:
+        lines.append(f"Unknowns:     {'; '.join(rca.unknowns)}")
     lines.append("")
-    lines.append("🤖 RCA-only — no fix attempted. Review required.")
+
+    if is_needs_human:
+        lines.append(
+            "🚑 NEEDS_HUMAN — confidence too low for an automated call. Please investigate."
+        )
+    else:
+        eligible, reason = fix_eligibility(state)
+        if eligible:
+            lines.append(f"🤖 High confidence — {reason}")
+        else:
+            lines.append(f"🤖 RCA-only — no fix attempted ({reason}). Review required.")
 
     return redact("\n".join(lines))
 

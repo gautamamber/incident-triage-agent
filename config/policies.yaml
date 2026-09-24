@@ -12,3 +12,16 @@ severity:
 
 investigation:
   max_code_tool_calls: 12
+
+confidence:
+  high: 0.75
+  medium: 0.50
+  weights:
+    trace_hotspot: 0.25
+    code_location: 0.20
+    change_correlation: 0.20
+    metric_corroboration: 0.15
+    log_corroboration: 0.10
+    historical_match: 0.10
+    missing_evidence_penalty: 0.10
+    conflicting_evidence_penalty: 0.20

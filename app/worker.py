@@ -1,11 +1,18 @@
 import sys
+from pathlib import Path
 
+from langgraph.checkpoint.postgres import PostgresSaver
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.agents.graph import build_graph
-from app.db import SessionLocal, init_db
+from app.db import SessionLocal, checkpointer_conn_string, init_db
+from app.models.confidence import ConfidenceScore
 from app.models.incident import Incident, IncidentSnapshot, IncidentStatus
+from app.models.rca import RCA
+from app.security.redaction import redact
+
+KNOWLEDGE_INCIDENTS_DIR = Path(__file__).resolve().parent.parent / "knowledge" / "incidents"
 
 _CLAIMABLE = [IncidentStatus.OPEN.value, IncidentStatus.REOPENED.value]
 
@@ -28,6 +35,34 @@ def _claim_incident(db: Session) -> Incident | None:
     return incident if got_lock else None
 
 
+def _write_knowledge_draft(
+    incident: IncidentSnapshot, rca: RCA, confidence: ConfidenceScore | None
+) -> None:
+    """Doc section 6.3's persist node: 'writes a draft knowledge/incidents/
+    INC-xxxx.md for human editing.' This is how the knowledge base grows on
+    its own — today's resolved incident becomes tomorrow's retrieve_knowledge
+    hit. Redacted like every other piece of text that leaves this pipeline,
+    even though the RCA's own inputs were already redacted upstream —
+    defense in depth, same reasoning as the collector's two redaction passes
+    back in Phase 1."""
+    KNOWLEDGE_INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
+    causal_chain = "\n".join(f"- {step}" for step in rca.causal_chain)
+    content = (
+        f"# {incident.key}: {rca.root_cause}\n\n"
+        f"**Service:** {incident.service}\n"
+        f"**Category:** {rca.category.value}\n"
+        f"**Exception:** {incident.exception_type}\n"
+        f"**Confidence:** {confidence.score if confidence else 'n/a'} "
+        f"({confidence.band if confidence else 'n/a'})\n\n"
+        f"## Root cause\n{rca.root_cause}\n\n"
+        f"## Causal chain\n{causal_chain}\n\n"
+        f"## Recommended action\n{rca.recommended_action}\n\n"
+        f"## Suspect commit\n{rca.suspect_commit or 'none identified'}\n\n"
+        "---\n*Draft, written automatically. Edit before treating as a trusted runbook.*\n"
+    )
+    (KNOWLEDGE_INCIDENTS_DIR / f"{incident.key}.md").write_text(redact(content))
+
+
 def run_once(db: Session, incident_id: int | None = None) -> None:
     incident = db.get(Incident, incident_id) if incident_id is not None else _claim_incident(db)
     if incident is None:
@@ -38,25 +73,44 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
     db.commit()
 
     snapshot = IncidentSnapshot.model_validate(incident)
-    graph = build_graph()
-    result = graph.invoke(
-        {
-            "incident": snapshot,
-            "repo_sha": None,
-            "classification": None,
-            "evidence": [],
-            "evidence_bundle": [],
-            "code_findings": [],
-            "rca": None,
-            "errors": [],
-        }
-    )
+    # thread_id = incident.id: every node's output is saved to Postgres under
+    # this thread (doc section 6.2). If the worker dies mid-run, invoking
+    # again with the same thread_id and input=None resumes from the last
+    # completed node instead of re-running the whole investigation.
+    config = {"configurable": {"thread_id": str(incident.id)}}
+    with PostgresSaver.from_conn_string(checkpointer_conn_string()) as checkpointer:
+        graph = build_graph(checkpointer=checkpointer)
+        result = graph.invoke(
+            {
+                "incident": snapshot,
+                "repo_sha": None,
+                "classification": None,
+                "evidence": [],
+                "evidence_bundle": [],
+                "code_findings": [],
+                "knowledge": [],
+                "rca": None,
+                "confidence": None,
+                "errors": [],
+            },
+            config=config,
+        )
 
     rca = result.get("rca")
+    confidence = result.get("confidence")
     incident.category = (result.get("classification") or {}).get("category")
     incident.rca_json = rca.model_dump_json() if rca else None
-    incident.status = IncidentStatus.RCA_READY.value if rca else IncidentStatus.NEEDS_HUMAN.value
+    incident.confidence_score = confidence.score if confidence else None
+    incident.confidence_band = confidence.band if confidence else None
+
+    if not rca or (confidence and confidence.band == "low"):
+        incident.status = IncidentStatus.NEEDS_HUMAN.value
+    else:
+        incident.status = IncidentStatus.RCA_READY.value
     db.commit()
+
+    if rca:
+        _write_knowledge_draft(snapshot, rca, confidence)
 
     print(f"[worker] {incident.key} -> {incident.status}")
     if result.get("errors"):
