@@ -1,0 +1,14 @@
+id: S01
+description: Unhandled None on refund lookup -> AttributeError -> 500
+inject:
+  demo_repo_patch: patches/S01-remove-null-check.patch
+  commit_message: "Refactor refund lookup (drop redundant existence check)"
+traffic:
+  script: traffic/refund_payments.py
+  duration_seconds: 10
+  rps: 5
+expected:
+  incident_count: 1
+  category: [APPLICATION]
+  fix_strategy: [revert_commit]
+  min_evidence_ids: 2

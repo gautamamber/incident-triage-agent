@@ -1,0 +1,14 @@
+id: S03
+description: Connection pool exhaustion — a raw connection opened per request is never closed
+inject:
+  demo_repo_patch: patches/S03-connection-leak.patch
+  commit_message: "Add duplicate-payment probe before fraud check"
+traffic:
+  script: traffic/create_payments.py
+  duration_seconds: 45
+  rps: 5
+expected:
+  incident_count: 1
+  category: [DATABASE]
+  fix_strategy: [revert_commit, code_change]
+  min_evidence_ids: 2

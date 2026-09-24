@@ -1,0 +1,48 @@
+From ebca6d0f69f0b70c6ce2088115925a45513c9348 Mon Sep 17 00:00:00 2001
+From: gautamamber <ambergautam1@gmail.com>
+Date: Thu, 24 Sep 2026 17:24:13 +0400
+Subject: [PATCH] Add duplicate-payment probe before fraud check
+
+---
+ app/api/payments.py | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/app/api/payments.py b/app/api/payments.py
+index c5e2b5f..faa2291 100644
+--- a/app/api/payments.py
++++ b/app/api/payments.py
+@@ -3,14 +3,18 @@ import logging
+ import httpx
+ from fastapi import APIRouter, Depends, HTTPException
+ from pydantic import BaseModel
++from sqlalchemy import text
+ from sqlalchemy.orm import Session
+ 
+ from app.config import settings
+-from app.db import Payment, get_db
++from app.db import Payment, engine, get_db
+ 
+ router = APIRouter()
+ logger = logging.getLogger(__name__)
+ 
++_recent_probes = []  # BUG: grows forever, so each `probe` connection below is
++# never garbage-collected and never returns to the pool — see create_payment.
++
+ 
+ class CreatePayment(BaseModel):
+     customer_id: str
+@@ -28,6 +32,11 @@ class PaymentOut(BaseModel):
+ 
+ @router.post("/payments", response_model=PaymentOut)
+ def create_payment(body: CreatePayment, db: Session = Depends(get_db)):
++    # Duplicate-payment probe, ahead of the fraud check.
++    probe = engine.connect()
++    probe.execute(text("SELECT 1"))
++    _recent_probes.append(probe)
++
+     fraud_resp = httpx.post(
+         f"{settings.fraud_mock_url}/check",
+         json={"customer_id": body.customer_id, "amount": body.amount},
+-- 
+2.39.5 (Apple Git-154)
+

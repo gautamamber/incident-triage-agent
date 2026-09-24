@@ -3,16 +3,20 @@ from app.agents.state import InvestigationState
 from app.llm import get_chat_model
 from app.models.rca import Category
 
-# Deliberately narrow and unambiguous — anything not covered here (like our
-# S01 AttributeError) is exactly the case meant to fall through to the LLM
-# (doc section 6.3: "only if no rule matches, a cheap LLM call picks").
+# Keys are SHORT exception class names (`type(exc).__name__`), not fully-
+# qualified paths — confirmed against real data (S03): OTel's logging
+# instrumentation records exception_type as just "TimeoutError", never
+# "sqlalchemy.exc.TimeoutError". A short name is a coarser, occasionally
+# ambiguous signal (a plain built-in TimeoutError would also match) — that
+# ambiguity is acceptable here because this table only exists to shortcut
+# the obvious cases; anything it gets wrong or doesn't recognize still falls
+# through to the LLM below, which is the actual safety net.
 _RULES = {
-    "sqlalchemy.exc.TimeoutError": Category.DATABASE,
-    "sqlalchemy.exc.OperationalError": Category.DATABASE,
-    "psycopg.OperationalError": Category.DATABASE,
-    "httpx.ReadTimeout": Category.DEPENDENCY,
-    "httpx.ConnectTimeout": Category.DEPENDENCY,
-    "httpx.ConnectError": Category.DEPENDENCY,
+    "TimeoutError": Category.DATABASE,
+    "OperationalError": Category.DATABASE,
+    "ReadTimeout": Category.DEPENDENCY,
+    "ConnectTimeout": Category.DEPENDENCY,
+    "ConnectError": Category.DEPENDENCY,
     "MemoryError": Category.MEMORY,
 }
 

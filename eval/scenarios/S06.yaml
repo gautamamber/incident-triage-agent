@@ -1,0 +1,9 @@
+id: S06
+description: "Noise: expected 404s on payment lookup — must not open an incident"
+inject: null
+traffic:
+  script: traffic/get_payments.py
+  duration_seconds: 10
+  rps: 5
+expected:
+  incident_count: 0

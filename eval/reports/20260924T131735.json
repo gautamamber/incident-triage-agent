@@ -1,0 +1,10 @@
+[
+  {
+    "checks": {
+      "incident_count": true
+    },
+    "pass": true,
+    "actual": null,
+    "id": "S06"
+  }
+]

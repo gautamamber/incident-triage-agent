@@ -1,0 +1,41 @@
+# Deliberately no `inject` — the doc's own scenario (12.1) allows S02's fix to
+# be NO_CODE_FIX rather than a commit-vs-revert case, and a real missing-index
+# incident is often literally this: a DB-level change (a DBA drop, a manual
+# migration) with no corresponding application commit at all. `fix_strategy`
+# isn't checked below — the route-node override that forces NO_CODE_FIX for
+# migration-only fixes (architecture doc section 8.2) isn't built until
+# Phase 8, so scoring it here would be premature.
+id: S02
+description: Slow query from a missing index (2M rows, deliberately low statement_timeout)
+inject: null
+setup_sql:
+  - "TRUNCATE payments"
+  - >
+    INSERT INTO payments (id, customer_id, amount, status, created_at)
+    SELECT gen_random_uuid()::text,
+           'cust-' || floor(random() * 200000)::int,
+           round((random()*500)::numeric, 2),
+           'completed',
+           now() - (random() * interval '30 days')
+    FROM generate_series(1, 2000000)
+  - "DROP INDEX IF EXISTS ix_payments_customer_id"
+  # 200ms, not the doc's illustrative 2s — calibrated against this actual
+  # environment: ~21ms with the index, ~300ms-1.2s without, measured live.
+  - "ALTER DATABASE payments SET statement_timeout = '200ms'"
+traffic:
+  script: traffic/list_customer_payments.py
+  duration_seconds: 20
+  rps: 3
+expected:
+  incident_count: 1
+  category: [DATABASE]
+  min_evidence_ids: 2
+teardown_sql:
+  # SET (session-level, immediate) must come first — ALTER DATABASE only
+  # changes the default for *future* connections, so without this the very
+  # next statement in this same session (CREATE INDEX, over 2M rows) would
+  # still be bound by the old 200ms limit and fail.
+  - "SET statement_timeout = 0"
+  - "ALTER DATABASE payments SET statement_timeout = 0"
+  - "CREATE INDEX IF NOT EXISTS ix_payments_customer_id ON payments (customer_id)"
+  - "TRUNCATE payments"
