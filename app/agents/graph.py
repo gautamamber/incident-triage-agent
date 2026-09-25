@@ -5,6 +5,7 @@ from app.agents.nodes.code_investigation import code_investigation
 from app.agents.nodes.collect import collect_git, collect_logs, collect_metrics, collect_traces
 from app.agents.nodes.confidence import score_confidence
 from app.agents.nodes.evidence import fuse_evidence
+from app.agents.nodes.fix import run_fix
 from app.agents.nodes.knowledge import retrieve_knowledge
 from app.agents.nodes.load_context import load_context
 from app.agents.nodes.notify import notify
@@ -16,8 +17,10 @@ from app.agents.state import InvestigationState
 def build_graph(checkpointer=None):
     """load_context -> classify -> [4 parallel collectors] -> fuse_evidence
     -> code_investigation -> retrieve_knowledge -> rca -> score_confidence ->
-    route -> notify (doc section 6.1; the fix subgraph is still not built —
-    Phase 10).
+    route -> {mark_needs_human | run_fix | notify} -> notify (doc section
+    6.1/9.2). `run_fix` is only ever reachable when route_decision's
+    fix_eligibility() check passes, which itself reads AGENT_MODE directly
+    from settings — 'observe'/'rca' modes never route here.
 
     `checkpointer`, when given, makes every node's output durable in Postgres
     (doc section 6.2) — a killed worker resumes an in-progress investigation
@@ -36,6 +39,7 @@ def build_graph(checkpointer=None):
     graph.add_node("rca", rca_node)
     graph.add_node("score_confidence", score_confidence)
     graph.add_node("mark_needs_human", mark_needs_human)
+    graph.add_node("run_fix", run_fix)
     graph.add_node("notify", notify)
 
     graph.set_entry_point("load_context")
@@ -51,9 +55,12 @@ def build_graph(checkpointer=None):
     graph.add_edge("retrieve_knowledge", "rca")
     graph.add_edge("rca", "score_confidence")
     graph.add_conditional_edges(
-        "score_confidence", route_decision, {"needs_human": "mark_needs_human", "notify": "notify"}
+        "score_confidence",
+        route_decision,
+        {"needs_human": "mark_needs_human", "fix": "run_fix", "notify": "notify"},
     )
     graph.add_edge("mark_needs_human", "notify")
+    graph.add_edge("run_fix", "notify")
     graph.add_edge("notify", END)
 
     return graph.compile(checkpointer=checkpointer)

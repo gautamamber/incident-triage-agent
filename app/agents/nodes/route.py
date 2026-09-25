@@ -34,12 +34,14 @@ def fix_eligibility(state: InvestigationState) -> tuple[bool, str]:
 def route_decision(state: InvestigationState) -> str:
     """The one real conditional edge in this graph (doc section 6.1's ROUTE
     node): low confidence goes through an explicit needs-human step first;
-    medium/high go straight to notify. 'high + fix eligible' has no third
-    destination yet — there's no fix subgraph node to send it to — but
-    fix_eligibility() above still computes and surfaces the reasoning."""
+    high confidence that also passes fix_eligibility() goes to the fix
+    subgraph; everything else goes straight to notify."""
     confidence = state["confidence"]
     if confidence is None or confidence.band == "low":
         return "needs_human"
+    eligible, _ = fix_eligibility(state)
+    if eligible:
+        return "fix"
     return "notify"
 
 

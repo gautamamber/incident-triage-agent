@@ -4,6 +4,7 @@ from typing import Annotated, TypedDict
 from app.models.code_finding import CodeFinding
 from app.models.confidence import ConfidenceScore
 from app.models.evidence import Evidence
+from app.models.fix import FixResult
 from app.models.incident import IncidentSnapshot
 from app.models.knowledge import KnowledgeHit
 from app.models.rca import RCA
@@ -24,4 +25,5 @@ class InvestigationState(TypedDict):
     knowledge: list[KnowledgeHit]
     rca: RCA | None
     confidence: ConfidenceScore | None
+    fix: FixResult | None
     errors: Annotated[list[str], operator.add]  # tool failures recorded, not fatal (section 6.4)

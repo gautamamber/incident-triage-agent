@@ -1,7 +1,10 @@
-# Section 15.2 of the architecture doc. `repository` would be a GitHub URL in
-# production; since the demo repo isn't pushed to GitHub yet (Phase 0 decision),
-# `local_path` points at the clone on disk instead. repo_registry.py reads
-# whichever one is set.
+# Section 15.2 of the architecture doc. repo_registry.py only ever reads
+# `local_path` — it's the investigation/fix tools' source of truth for where
+# the repo lives on disk (git tools, worktrees, sandbox all operate on this
+# path). The demo repo IS pushed to GitHub now (gautamamber/demo-payment-
+# service-triage, see GITHUB_REPO in .env), but that's used only by the
+# write tools' GitHub REST calls (create_draft_pr) — `repository` below stays
+# informational/unused.
 services:
   payment-service:
     repository: null

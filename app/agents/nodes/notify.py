@@ -48,10 +48,18 @@ def build_message(state: InvestigationState) -> str:
         lines.append(f"Unknowns:     {'; '.join(rca.unknowns)}")
     lines.append("")
 
+    fix = state.get("fix")
     if is_needs_human:
         lines.append(
             "🚑 NEEDS_HUMAN — confidence too low for an automated call. Please investigate."
         )
+    elif fix is not None:
+        if fix.outcome.value == "draft_pr_opened":
+            lines.append(f"🤖 Draft PR opened ({fix.strategy}): {fix.pr_url}")
+        else:
+            lines.append(
+                f"🤖 Fix attempt failed ({fix.strategy}): {fix.give_up_reason}. Review required."
+            )
     else:
         eligible, reason = fix_eligibility(state)
         if eligible:

@@ -25,3 +25,11 @@ confidence:
     historical_match: 0.10
     missing_evidence_penalty: 0.10
     conflicting_evidence_penalty: 0.20
+
+fix:
+  max_attempts: 3
+  max_files: 3
+  max_changed_lines: 80
+  allowed_paths: ["app/", "tests/"]
+  denied_paths: ["Dockerfile", ".github/", "pyproject.toml", "uv.lock", ".env"]
+  sandbox_timeout_seconds: 300

@@ -9,6 +9,7 @@ from app.agents.graph import build_graph
 from app.db import SessionLocal, checkpointer_conn_string, init_db
 from app.knowledge import reindex_knowledge
 from app.models.confidence import ConfidenceScore
+from app.models.fix import FixOutcome
 from app.models.incident import Incident, IncidentSnapshot, IncidentStatus
 from app.models.rca import RCA
 from app.security.redaction import redact
@@ -97,6 +98,7 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
                 "knowledge": [],
                 "rca": None,
                 "confidence": None,
+                "fix": None,
                 "errors": [],
             },
             config=config,
@@ -104,6 +106,7 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
 
     rca = result.get("rca")
     confidence = result.get("confidence")
+    fix = result.get("fix")
     incident.category = (result.get("classification") or {}).get("category")
     incident.rca_json = rca.model_dump_json() if rca else None
     incident.confidence_score = confidence.score if confidence else None
@@ -111,6 +114,8 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
 
     if not rca or (confidence and confidence.band == "low"):
         incident.status = IncidentStatus.NEEDS_HUMAN.value
+    elif fix is not None and fix.outcome == FixOutcome.DRAFT_PR_OPENED:
+        incident.status = IncidentStatus.FIX_PROPOSED.value
     else:
         incident.status = IncidentStatus.RCA_READY.value
     db.commit()
@@ -120,6 +125,10 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
         reindex_knowledge(db)  # so this incident is vector-searchable next time
 
     print(f"[worker] {incident.key} -> {incident.status}")
+    if fix is not None:
+        print(
+            f"[worker] fix: {fix.outcome.value} ({fix.strategy}) {fix.pr_url or fix.give_up_reason}"
+        )
     if result.get("errors"):
         print(f"[worker] errors: {result['errors']}")
 
