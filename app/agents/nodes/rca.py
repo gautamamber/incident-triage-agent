@@ -17,10 +17,9 @@ def _validate(rca: RCA, valid_ids: set[str]) -> list[str]:
 
 def rca_node(state: InvestigationState) -> dict:
     """Structured-output RCA, validated against the evidence bundle's real
-    IDs, retried once on failure (doc section 6.1's VAL -> retry -> RCA loop).
-    `include_raw=True` is only here to expose usage_metadata for the token
-    budget (doc 11.7) — this loop is already bounded to 2 calls, so it's
-    accounting, not active gating."""
+    IDs, retried once on failure. `include_raw=True` is only here to expose
+    usage_metadata for the token budget — this loop is already bounded to 2
+    calls, so it's accounting, not active gating."""
     incident = state["incident"]
     bundle = state["evidence_bundle"]
     valid_ids = {item.id for item in bundle}

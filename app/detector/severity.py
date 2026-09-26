@@ -6,11 +6,11 @@ def score_severity(
     error_ratio: float | None = None,
     critical_route_failing: bool = False,
 ) -> str:
-    """Deterministic severity (architecture doc section 5.5). `error_ratio` is
-    optional for now — computing it needs a Prometheus query for total request
-    volume in the same window, which the detector doesn't do yet (log-only in
-    Phase 3). Count-based thresholds alone are enough for S01/S06; ratio gets
-    wired in once the detector also reads Prometheus."""
+    """Deterministic severity scoring. `error_ratio` is optional for now —
+    computing it needs a Prometheus query for total request volume in the
+    same window, which the detector doesn't do yet (log-only). Count-based
+    thresholds alone are enough for scenarios S01/S06; ratio gets wired in
+    once the detector also reads Prometheus."""
     policies = load_policies()["severity"]
     p1 = policies["p1"]
     p2 = policies["p2"]

@@ -1,8 +1,7 @@
 """Proves every evidence builder redacts free text before it becomes part of
-an Evidence object — not just the one field each builder happened to redact
-before. Found live during the Phase 11 security review: build_log_evidence's
+an Evidence object — not just one field per builder. build_log_evidence's
 summary, build_trace_evidence's error_spans, and build_git_evidence's
-non-latest commit messages all bypassed redaction entirely."""
+non-latest commit messages previously bypassed redaction entirely."""
 
 from datetime import UTC, datetime
 

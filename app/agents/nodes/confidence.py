@@ -90,9 +90,9 @@ def _conflicting_evidence(
 
 
 def score_confidence(state: InvestigationState) -> dict:
-    """Deterministic, evidence-based score (doc section 8.3) — the LLM's own
-    self-reported confidence (rca.llm_confidence) is recorded but never used
-    here, on purpose: an LLM sounding certain and an LLM being correct aren't
+    """Deterministic, evidence-based score — the LLM's own self-reported
+    confidence (rca.llm_confidence) is recorded but never used here, on
+    purpose: an LLM sounding certain and an LLM being correct aren't
     reliably the same thing."""
     rca = state["rca"]
     if rca is None:
@@ -114,7 +114,9 @@ def score_confidence(state: InvestigationState) -> dict:
             bundle, category, weights["conflicting_evidence_penalty"]
         ),
     }
-    checks["historical_match"] = (0.0, "no knowledge base yet (Phase 9)")
+    # Not yet wired to state["knowledge"]'s actual hits — always scores 0
+    # regardless of whether a similar past incident was retrieved.
+    checks["historical_match"] = (0.0, "historical match signal not yet implemented")
 
     for name, (contribution, note) in checks.items():
         print(f"  [confidence] {name}: {contribution:+.2f} — {note}")

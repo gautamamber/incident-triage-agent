@@ -7,9 +7,8 @@ def test_redacts_luhn_valid_card_number():
 
 
 def test_does_not_redact_non_luhn_digit_run():
-    """The whole point of this pass vs Phase 1's collector-level regex: a 16-digit
-    number that just happens to be the right LENGTH but fails the Luhn checksum
-    is not a card number and must be left alone."""
+    """A 16-digit number that just happens to be the right length but fails
+    the Luhn checksum is not a card number and must be left alone."""
     text = "order reference: 1234567890123456"
     assert redact(text) == text
 

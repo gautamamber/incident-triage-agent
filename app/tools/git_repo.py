@@ -77,8 +77,8 @@ def git_diff(repo_path: Path, sha: str, max_lines: int = MAX_DIFF_LINES) -> str:
 
 
 def git_blame(repo_path: Path, path: str, start_line: int, end_line: int) -> str:
-    """Line-level commit attribution for one range (doc section 7.2) — who
-    last touched these specific lines, and when."""
+    """Line-level commit attribution for one range — who last touched these
+    specific lines, and when."""
     output = _run_git(
         repo_path, ["blame", "-L", f"{start_line},{end_line}", "--porcelain", "--", path]
     )

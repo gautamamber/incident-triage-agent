@@ -1,10 +1,8 @@
-# Section 15.2 of the architecture doc. repo_registry.py only ever reads
-# `local_path` — it's the investigation/fix tools' source of truth for where
-# the repo lives on disk (git tools, worktrees, sandbox all operate on this
-# path). The demo repo IS pushed to GitHub now (gautamamber/demo-payment-
-# service-triage, see GITHUB_REPO in .env), but that's used only by the
-# write tools' GitHub REST calls (create_draft_pr) — `repository` below stays
-# informational/unused.
+# repo_registry.py only ever reads `local_path` — it's the investigation/fix
+# tools' source of truth for where the repo lives on disk (git tools and the
+# sandbox all operate on this path). `repository` (a GitHub URL) is
+# informational only; the write tools' GitHub REST calls use GITHUB_REPO
+# from .env instead.
 services:
   payment-service:
     repository: null

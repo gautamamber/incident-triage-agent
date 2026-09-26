@@ -17,14 +17,14 @@ from app.agents.state import InvestigationState
 def build_graph(checkpointer=None):
     """load_context -> classify -> [4 parallel collectors] -> fuse_evidence
     -> code_investigation -> retrieve_knowledge -> rca -> score_confidence ->
-    route -> {mark_needs_human | run_fix | notify} -> notify (doc section
-    6.1/9.2). `run_fix` is only ever reachable when route_decision's
-    fix_eligibility() check passes, which itself reads AGENT_MODE directly
-    from settings — 'observe'/'rca' modes never route here.
+    route -> {mark_needs_human | run_fix | notify} -> notify. `run_fix` is
+    only ever reachable when route_decision's fix_eligibility() check
+    passes, which itself reads AGENT_MODE directly from settings —
+    'observe'/'rca' modes never route here.
 
-    `checkpointer`, when given, makes every node's output durable in Postgres
-    (doc section 6.2) — a killed worker resumes an in-progress investigation
-    from its last completed node instead of starting over."""
+    `checkpointer`, when given, makes every node's output durable in
+    Postgres — a killed worker resumes an in-progress investigation from its
+    last completed node instead of starting over."""
     graph = StateGraph(InvestigationState)
 
     graph.add_node("load_context", load_context)

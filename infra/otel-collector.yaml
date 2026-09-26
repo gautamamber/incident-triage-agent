@@ -34,7 +34,7 @@ processors:
       # middle of a continuous hex string like a trace_id/span_id, only at genuine
       # token edges (quotes, spaces, punctuation) where a real card number would sit.
       # Still not a real Luhn check — that's the second redaction pass in
-      # security/redaction.py before any LLM call (architecture doc section 11.3).
+      # security/redaction.py, run again before any LLM call.
       - '\b[0-9]{13,19}\b'
       - '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'  # emails
       - 'Bearer [A-Za-z0-9\-_.]+'              # bearer tokens / JWTs

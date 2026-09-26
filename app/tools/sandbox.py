@@ -7,8 +7,8 @@ AGENT_ROOT = Path(__file__).resolve().parent.parent.parent
 DOCKERFILE = AGENT_ROOT / "sandbox" / "Dockerfile.runner"
 
 # command_id -> fixed argument list. No free-form commands ever reach the
-# sandbox (doc section 7.3) — the LLM can request one of these three names,
-# never arbitrary shell text.
+# sandbox — the LLM can request one of these three names, never arbitrary
+# shell text.
 _ALLOWED_COMMANDS: dict[str, list[str]] = {
     "pytest_all": ["python", "-m", "pytest", "-q"],
     "pytest_file": ["python", "-m", "pytest", "-q"],  # a path gets appended by the caller
@@ -42,11 +42,10 @@ def _image_exists(tag: str) -> bool:
 
 def ensure_sandbox_image(repo_path: Path) -> str:
     """Builds `incident-agent-runner:<lockfile-hash>` if it doesn't already
-    exist for this exact dependency set (doc section 11.4) — built once from
-    the ORIGINAL repo checkout (never a worktree, since diff_policy already
-    forbids a patch touching pyproject.toml/uv.lock, so the lockfile is the
-    same for every worktree of this repo), then reused across every
-    validation run."""
+    exist for this exact dependency set — built once from the repo's own
+    checkout (diff_policy forbids a patch touching pyproject.toml/uv.lock,
+    so the lockfile never changes across fix attempts), then reused across
+    every validation run."""
     tag = f"incident-agent-runner:{_lockfile_hash(repo_path)}"
     if _image_exists(tag):
         return tag
@@ -64,10 +63,10 @@ def ensure_sandbox_image(repo_path: Path) -> str:
 def run_in_sandbox(
     worktree: Path, image_tag: str, command_id: str, file: str | None = None, timeout: int = 300
 ) -> SandboxResult:
-    """Runs one allowlisted command in a locked-down container (doc section
-    11.4): no network, read-only filesystem except the mounted worktree and
-    /tmp, capped CPU/memory/processes, non-root, no privilege escalation, no
-    Docker socket mounted in."""
+    """Runs one allowlisted command in a locked-down container: no network,
+    read-only filesystem except the mounted worktree and /tmp, capped
+    CPU/memory/processes, non-root, no privilege escalation, no Docker
+    socket mounted in."""
     if command_id not in _ALLOWED_COMMANDS:
         raise ValueError(f"unknown command_id {command_id!r}")
 

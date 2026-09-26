@@ -146,9 +146,9 @@ def build_git_evidence(incident: IncidentLike) -> Evidence | None:
 
 
 def build_evidence_bundle(incident: IncidentLike) -> list[Evidence]:
-    """Sequential convenience wrapper for the debug CLI (Phase 4) — the worker
-    (Phase 5) instead runs these same builder functions as parallel graph
-    nodes and calls renumber_evidence() once they've all finished."""
+    """Sequential convenience wrapper for the debug CLI — the worker instead
+    runs these same builder functions as parallel graph nodes and calls
+    renumber_evidence() once they've all finished."""
     raw = []
     for builder in (build_log_evidence, build_trace_evidence, build_git_evidence):
         item = builder(incident)

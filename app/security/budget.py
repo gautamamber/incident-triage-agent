@@ -6,9 +6,8 @@ def extract_tokens(response: Any) -> int:
     """Best-effort total-token count from either a plain langchain AIMessage
     or a `with_structured_output(..., include_raw=True)` result (a dict with
     'raw'/'parsed'/'parsing_error'). Returns 0 if the provider/response
-    doesn't expose usage — a missing count must never itself abort a run
-    (doc section 11.7: budgets gate cost, they don't become a new failure
-    mode of their own)."""
+    doesn't expose usage — a missing count must never itself abort a run;
+    budgets gate cost, they aren't a new failure mode of their own."""
     if isinstance(response, dict):
         response = response.get("raw")
     usage = getattr(response, "usage_metadata", None) if response is not None else None

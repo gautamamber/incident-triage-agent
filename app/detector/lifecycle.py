@@ -13,9 +13,9 @@ _AUTO_RESOLVE_ELIGIBLE = [
 
 
 def auto_resolve(db: Session, resolve_after_minutes: int) -> list[Incident]:
-    """No new occurrences for resolve_after_minutes -> RESOLVED (section 5.4).
-    Incidents mid-investigation (INVESTIGATING, FIX_PROPOSED) are left alone —
-    those belong to the worker (Phase 5+), not the detector."""
+    """No new occurrences for resolve_after_minutes -> RESOLVED. Incidents
+    mid-investigation (INVESTIGATING, FIX_PROPOSED) are left alone — those
+    belong to the worker, not the detector."""
     cutoff = datetime.now(UTC) - timedelta(minutes=resolve_after_minutes)
     stale = (
         db.query(Incident)

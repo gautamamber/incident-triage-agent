@@ -10,7 +10,7 @@ SERVICES_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "serv
 @dataclass
 class ServiceConfig:
     name: str
-    repo_path: Path  # resolved, absolute — always a real local clone (section 6.3: load_context)
+    repo_path: Path  # resolved, absolute — always a real local clone
     branch: str
     language: str
     critical_routes: list[str]
@@ -30,8 +30,8 @@ def get_service(name: str) -> ServiceConfig:
     local_path = raw.get("local_path")
     if local_path is None:
         raise ValueError(
-            f"service '{name}' has no local_path set — repository={raw.get('repository')!r} "
-            "isn't clonable yet (repo not pushed to GitHub, per the Phase 0 decision)"
+            f"service '{name}' has no local_path set in config/services.yaml — "
+            f"repository={raw.get('repository')!r} is informational only, not clonable from here"
         )
 
     repo_path = (SERVICES_PATH.parent.parent / local_path).resolve()

@@ -25,10 +25,10 @@ def touched_files(diff: str) -> list[str]:
 
 def check_diff(diff: str) -> DiffPolicyResult:
     """A whitelist, checked in code, on what an agent-generated patch is
-    allowed to touch (doc section 11.5). This runs BEFORE the patch is ever
-    applied for real — the LLM never gets a chance to argue its way past it,
-    and a rejection here means the fix subgraph gives up on this attempt
-    rather than silently loosening the check."""
+    allowed to touch. This runs before the patch is ever applied for real —
+    the LLM never gets a chance to argue its way past it, and a rejection
+    here means the fix subgraph gives up on this attempt rather than
+    silently loosening the check."""
     policies = load_policies()["fix"]
     reasons: list[str] = []
 

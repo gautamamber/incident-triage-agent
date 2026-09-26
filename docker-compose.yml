@@ -109,10 +109,10 @@ services:
       - tempo
       - prometheus
 
-  # Phase 11's "Compose profile for the agent" — opt-in (`docker compose
-  # --profile agent up`), so it never starts with a plain `docker compose up`.
-  # AGENT_MODE is hardcoded to rca here regardless of .env — see
-  # Dockerfile.agent for why fix-mode can't safely run in this container.
+  # Opt-in (`docker compose --profile agent up`), so it never starts with a
+  # plain `docker compose up`. AGENT_MODE is hardcoded to rca here regardless
+  # of .env — see Dockerfile.agent for why fix-mode can't safely run in this
+  # container.
   detector:
     profiles: ["agent"]
     build:

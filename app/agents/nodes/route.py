@@ -5,11 +5,9 @@ from app.services.repo_registry import get_service
 
 
 def fix_eligibility(state: InvestigationState) -> tuple[bool, str]:
-    """Checks every precondition from doc section 9.1, in code — not because
-    the fix subgraph exists yet (Phase 10), but so the reasoning is visible
-    now and AGENT_MODE is enforced here, at the routing step, exactly where
-    the Phase 0 gap-fix said it must be: not trusted from anything the LLM
-    said, read directly from the typed settings object."""
+    """Checks every precondition for entering the fix subgraph, in code.
+    AGENT_MODE is enforced here, at the routing step — never trusted from
+    anything the LLM said, read directly from the typed settings object."""
     rca = state["rca"]
     confidence = state["confidence"]
     if rca is None or confidence is None:
@@ -28,14 +26,14 @@ def fix_eligibility(state: InvestigationState) -> tuple[bool, str]:
         return False, "service not found in registry"
     if not service_cfg.fix_allowed:
         return False, f"service {state['incident'].service!r} is not on the fix allowlist"
-    return True, "eligible — would enter the fix subgraph (Phase 10, not built yet)"
+    return True, "eligible — enters the fix subgraph"
 
 
 def route_decision(state: InvestigationState) -> str:
-    """The one real conditional edge in this graph (doc section 6.1's ROUTE
-    node): low confidence goes through an explicit needs-human step first;
-    high confidence that also passes fix_eligibility() goes to the fix
-    subgraph; everything else goes straight to notify."""
+    """The one real conditional edge in this graph: low confidence goes
+    through an explicit needs-human step first; high confidence that also
+    passes fix_eligibility() goes to the fix subgraph; everything else goes
+    straight to notify."""
     confidence = state["confidence"]
     if confidence is None or confidence.band == "low":
         return "needs_human"

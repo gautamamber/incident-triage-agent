@@ -3,8 +3,8 @@ from langchain_openai import ChatOpenAI
 
 from app.config import settings
 
-# One factory keyed on LLM_PROVIDER (doc section 15.6) — every node asks for
-# "fast" or "strong," never imports a provider SDK directly. Swapping providers
+# One factory keyed on LLM_PROVIDER — every node asks for "fast" or
+# "strong," never imports a provider SDK directly. Swapping providers
 # (direct Anthropic, direct OpenAI, or an internal OpenAI-compatible gateway)
 # is a change to this file only.
 

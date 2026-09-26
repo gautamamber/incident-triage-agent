@@ -1,10 +1,10 @@
-"""Proves the retry loop's WIRING to diff_policy, not the policy logic
-itself (already unit-tested 8/8 in test_diff_policy.py). A live LLM won't
+"""Proves the retry loop's wiring to diff_policy, not the policy logic
+itself (already unit-tested in test_diff_policy.py). A live LLM won't
 reliably produce a policy-violating diff on demand — it either writes a
-compliant one or a syntactically broken one (confirmed live against
-INC-0039) — so this mocks just the two model calls to prove: a rejected
-diff is recorded with its rejection reasons, the loop retries instead of
-giving up, and a subsequent compliant diff still reaches _publish."""
+compliant one or a syntactically broken one — so this mocks just the two
+model calls to prove: a rejected diff is recorded with its rejection
+reasons, the loop retries instead of giving up, and a subsequent compliant
+diff still reaches _publish."""
 
 from unittest.mock import MagicMock
 

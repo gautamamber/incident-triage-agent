@@ -1,10 +1,9 @@
-# Deliberately no `inject` — the doc's own scenario (12.1) allows S02's fix to
-# be NO_CODE_FIX rather than a commit-vs-revert case, and a real missing-index
+# Deliberately no `inject` — this scenario's fix can legitimately be
+# NO_CODE_FIX rather than a commit-vs-revert case, since a real missing-index
 # incident is often literally this: a DB-level change (a DBA drop, a manual
 # migration) with no corresponding application commit at all. `fix_strategy`
-# isn't checked below — the route-node override that forces NO_CODE_FIX for
-# migration-only fixes (architecture doc section 8.2) isn't built until
-# Phase 8, so scoring it here would be premature.
+# isn't checked below — there's no route-node override yet that forces
+# NO_CODE_FIX for migration-only fixes, so scoring it here would be premature.
 id: S02
 description: Slow query from a missing index (2M rows, deliberately low statement_timeout)
 inject: null

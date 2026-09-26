@@ -23,11 +23,10 @@ _CLAIMABLE = [IncidentStatus.OPEN.value, IncidentStatus.REOPENED.value]
 
 
 def _claim_incident(db: Session) -> Incident | None:
-    """Postgres advisory lock keyed by incident_id (architecture doc section
-    5.4.1). Session-scoped — a crashed worker releases it automatically, no
-    cleanup needed. `pg_try_advisory_lock` never blocks: if another worker
-    already holds it, this just returns None and the caller tries the next
-    incident."""
+    """Postgres advisory lock keyed by incident_id. Session-scoped — a
+    crashed worker releases it automatically, no cleanup needed.
+    `pg_try_advisory_lock` never blocks: if another worker already holds it,
+    this just returns None and the caller tries the next incident."""
     incident = (
         db.query(Incident)
         .filter(Incident.status.in_(_CLAIMABLE))
@@ -43,13 +42,12 @@ def _claim_incident(db: Session) -> Incident | None:
 def _write_knowledge_draft(
     incident: IncidentSnapshot, rca: RCA, confidence: ConfidenceScore | None
 ) -> None:
-    """Doc section 6.3's persist node: 'writes a draft knowledge/incidents/
-    INC-xxxx.md for human editing.' This is how the knowledge base grows on
-    its own — today's resolved incident becomes tomorrow's retrieve_knowledge
-    hit. Redacted like every other piece of text that leaves this pipeline,
-    even though the RCA's own inputs were already redacted upstream —
-    defense in depth, same reasoning as the collector's two redaction passes
-    back in Phase 1."""
+    """Writes a draft knowledge/incidents/INC-xxxx.md for human editing —
+    this is how the knowledge base grows on its own, since today's resolved
+    incident becomes tomorrow's retrieve_knowledge hit. Redacted like every
+    other piece of text that leaves this pipeline, even though the RCA's own
+    inputs were already redacted upstream — defense in depth, same reasoning
+    as the collector's two redaction passes."""
     KNOWLEDGE_INCIDENTS_DIR.mkdir(parents=True, exist_ok=True)
     causal_chain = "\n".join(f"- {step}" for step in rca.causal_chain)
     # A short title, not the full root_cause sentence — this becomes the H1
@@ -87,8 +85,7 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
     max_runs_per_hour = load_policies()["budget"]["max_runs_per_hour"]
     if _runs_in_last_hour(db) >= max_runs_per_hour:
         # Leave status untouched (still OPEN/REOPENED) so a later run picks
-        # this incident back up — a rate limit defers work, it doesn't drop
-        # it (doc section 11.7).
+        # this incident back up — a rate limit defers work, it doesn't drop it.
         print(f"[worker] rate limit: {max_runs_per_hour}/hour reached, deferring {incident.key}")
         return
 
@@ -98,9 +95,9 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
 
     snapshot = IncidentSnapshot.model_validate(incident)
     # thread_id = incident.id: every node's output is saved to Postgres under
-    # this thread (doc section 6.2). If the worker dies mid-run, invoking
-    # again with the same thread_id and input=None resumes from the last
-    # completed node instead of re-running the whole investigation.
+    # this thread. If the worker dies mid-run, invoking again with the same
+    # thread_id and input=None resumes from the last completed node instead
+    # of re-running the whole investigation.
     config = {"configurable": {"thread_id": str(incident.id)}}
     with PostgresSaver.from_conn_string(checkpointer_conn_string()) as checkpointer:
         graph = build_graph(checkpointer=checkpointer)
@@ -154,11 +151,10 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
 
 
 def run_forever(poll_seconds: int = 10) -> None:
-    """Continuous version of run_once, for the containerized Compose profile
-    (doc section 16 Phase 11) — mirrors app/detector/poller.py's run_forever,
-    which already runs this way. A one-shot `run_once()` invocation is still
-    how the eval harness and manual host runs use this module; this is only
-    for the always-on service case."""
+    """Continuous version of run_once, for the containerized Compose
+    profile — mirrors app/detector/poller.py's run_forever. A one-shot
+    `run_once()` invocation is still how the eval harness and manual host
+    runs use this module; this is only for the always-on service case."""
     init_db()
     print(f"[worker] polling for claimable incidents every {poll_seconds}s")
     while True:

@@ -5,10 +5,10 @@ from app.models.evidence import Evidence
 
 
 def retrieve_knowledge(state: InvestigationState) -> dict:
-    """Runs after code_investigation, before rca (doc section 6.1's KB node)
-    — retrieved runbooks/past-incidents become new evidence items, same
-    numbering pattern as code_investigation's findings, so the rca prompt
-    sees them the same way it sees any other evidence source."""
+    """Runs after code_investigation, before rca — retrieved runbooks/
+    past-incidents become new evidence items, same numbering pattern as
+    code_investigation's findings, so the rca prompt sees them the same way
+    it sees any other evidence source."""
     incident = state["incident"]
     classification = state.get("classification") or {}
     query = " ".join(

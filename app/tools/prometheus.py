@@ -29,10 +29,9 @@ def query_metric(
     prometheus_url: str, promql: str, baseline_at: float, incident_at: float
 ) -> MetricComparison:
     """Compares one PromQL expression at two points in time — just before the
-    incident vs during it (doc section 7.1's baseline_value/incident_value/
-    change_ratio). Simplification vs the full doc spec: this samples two
-    instants rather than averaging over two windows — good enough to show
-    "did this jump," not precise enough for a real change-point detector."""
+    incident vs during it. This samples two instants rather than averaging
+    over two windows — good enough to show "did this jump," not precise
+    enough for a real change-point detector."""
     baseline = _instant_query(prometheus_url, promql, baseline_at)
     incident = _instant_query(prometheus_url, promql, incident_at)
 

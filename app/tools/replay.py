@@ -7,9 +7,9 @@ import httpx
 
 # The project's own Compose network — the replay container joins it so it can
 # reach the real postgres/fraud-mock services, same as demo-payment-service
-# itself does. Optional validation (doc section 9.3): on top of, not instead
-# of, the sandbox's --network none pytest+ruff checks, since serving real
-# traffic needs a real network the sandbox deliberately doesn't have.
+# itself does. This is an optional validation step on top of, not instead of,
+# the sandbox's --network none pytest+ruff checks, since serving real traffic
+# needs a real network the sandbox deliberately doesn't have.
 NETWORK = "incident-triage-agent_default"
 _STATUS_5XX_RE = re.compile(r"\b5\d\d\b")
 

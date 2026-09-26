@@ -1,41 +1,30 @@
 """
-Exercise: the second redaction pass (architecture doc section 11.3) — runs on
-anything about to reach an LLM, Slack, or a PR body. Unlike the OTel Collector's
-regex-only first pass (Phase 1), this one can afford real logic, in particular
-an actual Luhn checksum for card numbers instead of "any 13-19 digit run" —
-which is exactly the pattern that falsely mangled a trace ID back in Phase 1.
+Second redaction pass — runs on anything about to reach an LLM, Slack, or a
+PR body. Unlike the OTel Collector's regex-only first pass, this one can
+afford real logic, in particular an actual Luhn checksum for card numbers
+instead of "any 13-19 digit run," which avoids falsely redacting things like
+trace IDs that merely happen to be the same length as a card number.
 
-Implement, in this order (order matters — redact structured patterns like a
-DSN password or a JWT before the generic card-number pass gets a chance to
-misinterpret their digit substrings):
+Redaction runs in a fixed order: structured patterns (a DSN password, a JWT)
+are matched before the generic card-number pass gets a chance to
+misinterpret their digit substrings.
 
-  1. Password in a URL/DSN: scheme://user:PASSWORD@host -> scheme://user:<secret>@host
-     Keep the scheme, user, and host. Only the password is replaced.
-
-  2. Query-string secrets: ?token=X, &password=X, &secret=X, &api_key=X (case-insensitive
-     key) -> replace X with <secret>. Leave other query params alone.
-
-  3. Bearer tokens: "Bearer <token>" -> "<secret>" (replaces the whole "Bearer ..." span).
-
-  4. JWTs: three base64url segments separated by dots, first segment starts with
-     "eyJ" (base64 of '{"') -> <secret>.
-
-  5. Known API key prefixes: sk-, ghp_, github_pat_, xox, AKIA, each followed by
-     alphanumerics/-/_ -> <secret>.
-
+  1. Password in a URL/DSN: scheme://user:PASSWORD@host -> scheme://user:<secret>@host.
+     Only the password is replaced; scheme, user, and host are kept.
+  2. Query-string secrets: ?token=X, &password=X, &secret=X, &api_key=X
+     (case-insensitive key) -> X replaced with <secret>. Other params untouched.
+  3. Bearer tokens: "Bearer <token>" -> "<secret>".
+  4. JWTs: three base64url segments separated by dots, first segment starting
+     with "eyJ" (base64 of '{"') -> <secret>.
+  5. Known API key prefixes (sk-, ghp_, github_pat_, xox, AKIA) -> <secret>.
   6. Emails -> <email>.
+  7. Card numbers: a run of 13-19 digits (optionally separated by spaces or
+     dashes) that passes the Luhn checksum -> <card>. A same-length digit run
+     that fails Luhn is left untouched.
 
-  7. Card numbers: a run of 13-19 digits that passes the Luhn checksum -> <card>.
-     A same-length digit run that FAILS Luhn must be left untouched — that's the
-     test that proves this pass is better than Phase 1's collector regex.
-
-Luhn check, for step 7: starting from the rightmost digit, double every second
+Luhn check (step 7): starting from the rightmost digit, double every second
 digit; if a doubled digit exceeds 9, subtract 9. Sum all digits (doubled and
-undoubled). Valid if the sum is divisible by 10. Write this as its own small
-helper — it's the one genuinely new algorithm in this exercise, worth pulling
-out and testing in isolation.
-
-Run: `uv run pytest tests/unit/security/test_redaction.py -v`
+undoubled). Valid if the sum is divisible by 10.
 """
 
 

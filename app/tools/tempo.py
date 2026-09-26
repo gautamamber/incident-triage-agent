@@ -45,9 +45,9 @@ def _component_key(span: dict, resource_attrs: dict, is_root: bool) -> str:
 
 
 def get_trace(tempo_url: str, trace_id: str) -> TraceSummary:
-    """Trace duration + per-component percentage breakdown (doc section 7.1's
-    worked example). Percentages, not raw spans — the RCA step (Phase 5+)
-    reads "postgresql: 88%", not a wall of nanosecond timestamps.
+    """Trace duration + per-component percentage breakdown. Percentages, not
+    raw spans — the RCA step reads "postgresql: 88%", not a wall of
+    nanosecond timestamps.
 
     Uses each span's EXCLUSIVE duration (its own time minus its direct
     children's time), not raw span duration — summing raw durations

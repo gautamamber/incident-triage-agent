@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class Evidence(BaseModel):
-    id: str  # "E3" — stable IDs the RCA step (Phase 5+) must cite
+    id: str  # "E3" — stable ID the RCA step must cite
     source: Literal["logs", "trace", "metric", "git", "code", "knowledge"]
     summary: str  # one line, produced by code where possible
     facts: dict[str, Any]

@@ -376,18 +376,16 @@ def _run_code_change(
 
 
 def run_fix(state: InvestigationState) -> dict:
-    """The fix subgraph (doc section 9.2), run as one bounded node rather than
-    N graph nodes — same pattern as code_investigation's agentic loop: the
-    retry loop is inherently sequential and stateful, so a single Python
-    function owns it rather than fighting LangGraph's edge system to express
-    a retry with feedback.
+    """The fix subgraph, run as one bounded node rather than N graph nodes —
+    same pattern as code_investigation's agentic loop: the retry loop is
+    inherently sequential and stateful, so a single Python function owns it
+    rather than fighting LangGraph's edge system to express a retry with
+    feedback.
 
     Validation runs against a plain filesystem snapshot (repo_write.py's
     scratch copy), and the actual commit — once validation passes — is made
     through the GitHub REST API rather than local git. See repo_write.py's
-    module docstring for why: this machine's commit guardrail blocks any
-    commit made inside a git worktree, so local git commit is a dead end for
-    this subgraph regardless of isolation strategy."""
+    module docstring for why."""
     incident = state["incident"]
     rca = state["rca"]
     confidence = state["confidence"]

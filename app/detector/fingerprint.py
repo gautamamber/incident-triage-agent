@@ -1,9 +1,12 @@
 """
-Exercise: implement error fingerprinting (architecture doc section 5.2).
+Error fingerprinting: groups log lines that differ only in their variable
+parts (a UUID, a number, a timestamp) into one recurring problem instead of
+counting each occurrence as unrelated. This is what lets the aggregator count
+"Payment not found: <uuid>" occurring 50 times as one incident.
 
-normalize_message(message) must replace, in this order (order matters — e.g. a
-UUID contains hex characters and digits, so it must be matched before the
-plainer hex/number patterns would wrongly chew it up piecemeal):
+normalize_message(message) replaces, in this order (order matters — a UUID
+contains hex characters and digits, so it must be matched before the plainer
+hex/number patterns would wrongly chew it up piecemeal):
 
     UUIDs                    -> <uuid>
     hex strings, 8+ chars    -> <hex>
@@ -14,19 +17,10 @@ plainer hex/number patterns would wrongly chew it up piecemeal):
     integers and decimals    -> <num>
     repeated whitespace      -> single space
 
-Run the tests as you go: `uv run pytest tests/unit/detector/test_fingerprint.py -v`
-They pin down the exact patterns expected — e.g. "30 seconds" -> "<num> seconds",
-not "<num><num>" or similar. Use the `re` module.
-
-fingerprint(service, exception_type, message, top_frame) must:
-  1. Call normalize_message(message).
-  2. Concatenate: service + (exception_type or "none") + normalized_message + (top_frame or "none")
-  3. Return the hex sha1 digest of that concatenation (`hashlib.sha1(...).hexdigest()`).
-
-Two log lines that differ only in their variable parts (a UUID, a number, a
-timestamp) must produce the identical fingerprint — that's the whole point:
-it's what lets the aggregator (Phase 3's next file) count "Payment not found: <uuid>"
-occurring 50 times as ONE recurring problem instead of 50 unrelated ones.
+fingerprint(service, exception_type, message, top_frame) normalizes the
+message, concatenates service + (exception_type or "none") +
+normalized_message + (top_frame or "none"), and returns the hex SHA1 digest
+of that string.
 """
 
 import hashlib

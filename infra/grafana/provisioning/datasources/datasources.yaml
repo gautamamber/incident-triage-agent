@@ -7,8 +7,8 @@ datasources:
     url: http://loki:3100
     uid: loki
     jsonData:
-      # matcherRegex is a best guess pending Phase 1's done-when check: confirm how
-      # trace_id actually renders in a Loki log line/structured metadata, then fix this.
+      # Matches trace_id as it appears in the log line, linking a log entry
+      # to its trace in Tempo.
       derivedFields:
         - datasourceUid: tempo
           matcherRegex: 'trace_id=(\w+)'

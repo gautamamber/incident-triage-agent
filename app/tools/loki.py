@@ -73,8 +73,8 @@ def search_logs(
     contains: str | None = None,
     limit: int = 200,
 ) -> list[LogRecord]:
-    """General log search for evidence collection (doc section 7.1) — broader
-    than the detector's error-only poll: any severity, optional text filter."""
+    """General log search for evidence collection — broader than the
+    detector's error-only poll: any severity, optional text filter."""
     query = f'{{service_name="{service}"}}'
     if level:
         query += f' | severity_text=~"{level}"'

@@ -1,6 +1,6 @@
-"""Known-answer eval harness (architecture doc section 12.2). For each scenario:
-reset -> inject the bug as a real commit -> generate traffic -> let the detector
-find it -> let the worker investigate it -> compare against the expected answer.
+"""Known-answer eval harness. For each scenario: reset -> inject the bug as a
+real commit -> generate traffic -> let the detector find it -> let the worker
+investigate it -> compare against the expected answer.
 """
 
 import argparse
@@ -69,8 +69,7 @@ def rebuild_demo_service() -> None:
     # rebuilt image is byte-identical to the last one, so plain `up -d` sees
     # "nothing changed" and leaves the OLD container running — with its OLD,
     # long-lived DB connection pool, silently predating any setup_sql change
-    # (e.g. S02's statement_timeout). Confirmed live: this was the actual
-    # cause of S02 never triggering, not a caching/timing issue.
+    # (e.g. S02's statement_timeout).
     _run(
         ["docker", "compose", "up", "-d", "--force-recreate", "demo-payment-service"],
         cwd=AGENT_DIR,
@@ -118,8 +117,7 @@ def reset_agent_db() -> None:
     detector_cursor -> start 5 minutes ago") means back-to-back scenario runs
     bleed into each other: whatever errors the *previous* scenario generated
     are still within that 5-minute lookback and get picked up by the next
-    one. Confirmed live — this caused S01/S02/S03/S06 to cross-contaminate
-    when run as a full suite."""
+    one, cross-contaminating results when the full suite runs."""
     db = SessionLocal()
     db.execute(text("TRUNCATE incidents, occurrence_buckets, detector_cursor"))
     db.execute(

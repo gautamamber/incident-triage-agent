@@ -1,6 +1,6 @@
-# Confirmed against real Prometheus output in Phase 1 (opentelemetry-instrumentation-fastapi
-# 0.65b0 / -httpx 0.65b0, September 2026). Query code must read names from here, never
-# hard-code a literal metric name — these change across instrumentation library versions.
+# Metric names as emitted by opentelemetry-instrumentation-fastapi/-httpx.
+# Query code must read names from here, never hard-code a literal metric
+# name — these change across instrumentation library versions.
 
 payment-service:
   http_server_duration_ms: http_server_duration_milliseconds_bucket

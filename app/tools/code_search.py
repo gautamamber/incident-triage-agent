@@ -25,10 +25,8 @@ def _iter_py_files(repo_path: Path):
 
 
 def search_code(repo_path: Path, pattern: str, glob: str = "*.py") -> str:
-    """Regex search across the repo (doc section 7.2's search_code) — pure
-    Python instead of shelling out to ripgrep, since this machine doesn't
-    have it installed and this project avoids adding dependencies the user
-    hasn't explicitly asked for."""
+    """Regex search across the repo — pure Python instead of shelling out to
+    ripgrep, avoiding an external binary dependency."""
     try:
         regex = re.compile(pattern)
     except re.error as exc:

@@ -54,7 +54,7 @@ class IncidentSnapshot(BaseModel):
     """Plain, DB-session-free copy of an Incident row — what actually flows
     through the LangGraph state. The ORM object stays with the worker; nodes
     only ever see this snapshot, so nothing breaks if the session closes or
-    the state gets checkpointed/serialized later (Phase 8)."""
+    the state gets checkpointed/serialized later."""
 
     model_config = {"from_attributes": True}
 
@@ -102,10 +102,10 @@ class DetectorCursor(Base):
 
 
 class AgentRunLog(Base):
-    """One row per investigation the worker actually starts (doc section
-    11.7's max_runs_per_hour) — a durable counter across process restarts,
-    since each `run_once` invocation is its own short-lived process, not a
-    long-running loop with in-memory state to rate-limit against."""
+    """One row per investigation the worker actually starts — a durable
+    counter across process restarts, since each `run_once` invocation is its
+    own short-lived process, not a long-running loop with in-memory state to
+    rate-limit against."""
 
     __tablename__ = "agent_run_log"
 

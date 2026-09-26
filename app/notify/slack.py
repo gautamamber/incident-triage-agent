@@ -4,8 +4,8 @@ from app.config import settings
 
 
 def post_slack(text: str) -> bool:
-    """Posts to the incoming webhook (doc section 7.3). Returns False — never
-    raises — if no webhook is configured, same skip-not-fail pattern as
+    """Posts to the incoming webhook. Returns False — never raises — if no
+    webhook is configured, same skip-not-fail pattern as
     check_credentials.py: a missing Slack config shouldn't crash a run."""
     if not settings.slack_webhook_url:
         return False
