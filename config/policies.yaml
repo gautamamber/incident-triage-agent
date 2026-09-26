@@ -33,3 +33,12 @@ fix:
   allowed_paths: ["app/", "tests/"]
   denied_paths: ["Dockerfile", ".github/", "pyproject.toml", "uv.lock", ".env"]
   sandbox_timeout_seconds: 300
+
+# Doc section 11.7 — the two truly unbounded-cost loops (code_investigation's
+# tool-call loop, the fix subgraph's patch-retry loop) check both of these on
+# every iteration and stop early rather than run away. max_runs_per_hour is
+# enforced by the worker before it claims a new incident, not per-node.
+budget:
+  max_tokens_per_run: 150000
+  max_wall_seconds_per_run: 600
+  max_runs_per_hour: 10

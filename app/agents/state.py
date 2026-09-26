@@ -18,6 +18,8 @@ class Classification(TypedDict):
 class InvestigationState(TypedDict):
     incident: IncidentSnapshot
     repo_sha: str | None
+    run_started_at: str | None  # ISO timestamp from load_context (doc 11.7 wall-time budget)
+    token_usage: Annotated[int, operator.add]  # running total across every LLM call this run
     classification: Classification | None
     evidence: Annotated[list[Evidence], operator.add]  # raw: parallel nodes each append here
     evidence_bundle: list[Evidence]  # final, E1/E2/E3-numbered — set once by fuse_evidence

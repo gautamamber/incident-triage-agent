@@ -47,7 +47,11 @@ _BEARER_RE = re.compile(r"Bearer\s+[A-Za-z0-9\-_.]+")
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
 _API_KEY_RE = re.compile(r"\b(?:sk-|ghp_|github_pat_|xox[a-zA-Z]?-?|AKIA)[A-Za-z0-9_-]+\b")
 _EMAIL_RE = re.compile(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b")
-_CARD_CANDIDATE_RE = re.compile(r"\b\d{13,19}\b")
+# Digits with an optional single space/dash between each pair — how a card
+# number actually gets written in a validation error, a CSV export, or a
+# user-facing message ("4111-1111-1111-1111"), not just as one solid run.
+# Total digit count (separators don't count) is still constrained to 13-19.
+_CARD_CANDIDATE_RE = re.compile(r"\b(?:\d[ -]?){12,18}\d\b")
 
 
 def _luhn_valid(digits: str) -> bool:
@@ -64,7 +68,8 @@ def _luhn_valid(digits: str) -> bool:
 
 def _redact_cards(text: str) -> str:
     def replace(match: re.Match) -> str:
-        return "<card>" if _luhn_valid(match.group(0)) else match.group(0)
+        digits = re.sub(r"[ -]", "", match.group(0))
+        return "<card>" if _luhn_valid(digits) else match.group(0)
 
     return _CARD_CANDIDATE_RE.sub(replace, text)
 

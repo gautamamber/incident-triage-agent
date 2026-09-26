@@ -99,3 +99,15 @@ class DetectorCursor(Base):
 
     id: Mapped[str] = mapped_column(String(20), primary_key=True)
     last_timestamp_ns: Mapped[int] = mapped_column(BigInteger)
+
+
+class AgentRunLog(Base):
+    """One row per investigation the worker actually starts (doc section
+    11.7's max_runs_per_hour) — a durable counter across process restarts,
+    since each `run_once` invocation is its own short-lived process, not a
+    long-running loop with in-memory state to rate-limit against."""
+
+    __tablename__ = "agent_run_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

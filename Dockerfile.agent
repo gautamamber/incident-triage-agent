@@ -1,0 +1,26 @@
+# Containerized detector/worker (doc section 16 Phase 11's "Compose profile
+# for the agent"). Scope: detection + investigation/RCA only.
+#
+# The fix subgraph launches sandbox containers via `docker run` against the
+# HOST's Docker daemon (app/tools/sandbox.py). Mounting that daemon's socket
+# into this container is exactly what doc section 11.4 says never to do
+# ("Do not mount the Docker socket into any container"), and a real fix
+# there — rootless Docker, or a dedicated runner service with a minimal API
+# — is real infrastructure work the doc itself defers ("If the worker is
+# containerized later, use rootless Docker or a dedicated runner with a
+# minimal API"). So: AGENT_MODE=fix is not supported when running the worker
+# this way. Run it on the host (as every fix-subgraph test this project has
+# done so far already does) for fix-mode; use this image for detection/RCA
+# only, e.g. AGENT_MODE=rca or AGENT_MODE=observe.
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+COPY pyproject.toml ./
+RUN uv pip install --system --no-cache -r pyproject.toml
+
+COPY app ./app
+COPY config ./config
+
+ENTRYPOINT ["python", "-m"]

@@ -43,9 +43,12 @@ def build_log_evidence(incident: IncidentLike) -> Evidence | None:
     return Evidence(
         id="",
         source="logs",
-        summary=(
-            f"{len(matching)} occurrences of '{incident.normalized_message}' "
-            "in the last 10 min"
+        # normalized_message is regex-normalized (IDs/UUIDs stripped) but not
+        # redacted — a free-text field a request can set (e.g. a "reason"
+        # query param) survives normalization untouched, so this still needs
+        # its own redaction pass, same as the sample lines below.
+        summary=redact(
+            f"{len(matching)} occurrences of '{incident.normalized_message}' in the last 10 min"
         ),
         facts={"count": len(matching), "sample_lines": [redact(r.body) for r in matching[:3]]},
     )
@@ -71,7 +74,13 @@ def build_trace_evidence(incident: IncidentLike) -> Evidence | None:
         facts={
             "total_ms": trace.total_ms,
             "components": [c.__dict__ for c in trace.components],
-            "error_spans": [e.__dict__ for e in trace.error_spans],
+            # error_spans.message is an exception message — the same class
+            # of user-reachable free text doc 11.1's threat model calls out
+            # ("A user submits ... it is logged and reaches the LLM").
+            "error_spans": [
+                {**e.__dict__, "message": redact(e.message) if e.message else e.message}
+                for e in trace.error_spans
+            ],
         },
         ref=f"{settings.tempo_url}/api/traces/{trace.trace_id}",
     )
@@ -127,7 +136,11 @@ def build_git_evidence(incident: IncidentLike) -> Evidence | None:
             f"commit {latest.sha[:8]} '{redact(latest.message)}' by {latest.author} "
             f"touched {path or 'the affected file'}, {latest.timestamp}"
         ),
-        facts={"commits": [c.__dict__ for c in commits]},
+        # Only `latest.message` was redacted above (for the summary line) —
+        # every OTHER commit's message here was going into the LLM prompt
+        # completely unredacted (a commit message is exactly the kind of
+        # free text someone can accidentally paste a secret into).
+        facts={"commits": [{**c.__dict__, "message": redact(c.message)} for c in commits]},
         ref=latest.sha,
     )
 

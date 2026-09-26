@@ -1,4 +1,6 @@
 import sys
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -10,8 +12,9 @@ from app.db import SessionLocal, checkpointer_conn_string, init_db
 from app.knowledge import reindex_knowledge
 from app.models.confidence import ConfidenceScore
 from app.models.fix import FixOutcome
-from app.models.incident import Incident, IncidentSnapshot, IncidentStatus
+from app.models.incident import AgentRunLog, Incident, IncidentSnapshot, IncidentStatus
 from app.models.rca import RCA
+from app.policies import load_policies
 from app.security.redaction import redact
 
 KNOWLEDGE_INCIDENTS_DIR = Path(__file__).resolve().parent.parent / "knowledge" / "incidents"
@@ -70,12 +73,26 @@ def _write_knowledge_draft(
     (KNOWLEDGE_INCIDENTS_DIR / f"{incident.key}.md").write_text(redact(content))
 
 
+def _runs_in_last_hour(db: Session) -> int:
+    cutoff = datetime.now(UTC) - timedelta(hours=1)
+    return db.query(AgentRunLog).filter(AgentRunLog.started_at >= cutoff).count()
+
+
 def run_once(db: Session, incident_id: int | None = None) -> None:
     incident = db.get(Incident, incident_id) if incident_id is not None else _claim_incident(db)
     if incident is None:
         print("[worker] nothing to investigate")
         return
 
+    max_runs_per_hour = load_policies()["budget"]["max_runs_per_hour"]
+    if _runs_in_last_hour(db) >= max_runs_per_hour:
+        # Leave status untouched (still OPEN/REOPENED) so a later run picks
+        # this incident back up — a rate limit defers work, it doesn't drop
+        # it (doc section 11.7).
+        print(f"[worker] rate limit: {max_runs_per_hour}/hour reached, deferring {incident.key}")
+        return
+
+    db.add(AgentRunLog(started_at=datetime.now(UTC)))
     incident.status = IncidentStatus.INVESTIGATING.value
     db.commit()
 
@@ -91,6 +108,8 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
             {
                 "incident": snapshot,
                 "repo_sha": None,
+                "run_started_at": None,
+                "token_usage": 0,
                 "classification": None,
                 "evidence": [],
                 "evidence_bundle": [],
@@ -125,6 +144,7 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
         reindex_knowledge(db)  # so this incident is vector-searchable next time
 
     print(f"[worker] {incident.key} -> {incident.status}")
+    print(f"[worker] token_usage: {result.get('token_usage', 0)}")
     if fix is not None:
         print(
             f"[worker] fix: {fix.outcome.value} ({fix.strategy}) {fix.pr_url or fix.give_up_reason}"
@@ -133,13 +153,33 @@ def run_once(db: Session, incident_id: int | None = None) -> None:
         print(f"[worker] errors: {result['errors']}")
 
 
-if __name__ == "__main__":
+def run_forever(poll_seconds: int = 10) -> None:
+    """Continuous version of run_once, for the containerized Compose profile
+    (doc section 16 Phase 11) — mirrors app/detector/poller.py's run_forever,
+    which already runs this way. A one-shot `run_once()` invocation is still
+    how the eval harness and manual host runs use this module; this is only
+    for the always-on service case."""
     init_db()
-    session = SessionLocal()
-    try:
-        if len(sys.argv) > 1:
-            run_once(session, incident_id=int(sys.argv[1].removeprefix("INC-")))
-        else:
+    print(f"[worker] polling for claimable incidents every {poll_seconds}s")
+    while True:
+        session = SessionLocal()
+        try:
             run_once(session)
-    finally:
-        session.close()
+        finally:
+            session.close()
+        time.sleep(poll_seconds)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--forever":
+        run_forever()
+    else:
+        init_db()
+        session = SessionLocal()
+        try:
+            if len(sys.argv) > 1:
+                run_once(session, incident_id=int(sys.argv[1].removeprefix("INC-")))
+            else:
+                run_once(session)
+        finally:
+            session.close()

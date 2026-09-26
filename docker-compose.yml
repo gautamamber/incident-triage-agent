@@ -109,6 +109,48 @@ services:
       - tempo
       - prometheus
 
+  # Phase 11's "Compose profile for the agent" — opt-in (`docker compose
+  # --profile agent up`), so it never starts with a plain `docker compose up`.
+  # AGENT_MODE is hardcoded to rca here regardless of .env — see
+  # Dockerfile.agent for why fix-mode can't safely run in this container.
+  detector:
+    profiles: ["agent"]
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    command: ["app.detector.poller", "payment-service"]
+    restart: unless-stopped
+    environment:
+      AGENT_DATABASE_URL: postgresql+psycopg://agent:agent@postgres:5432/agent
+      LOKI_URL: http://loki:3100
+      TEMPO_URL: http://tempo:3200
+      PROMETHEUS_URL: http://prometheus:9090
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    profiles: ["agent"]
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    command: ["app.worker", "--forever"]
+    restart: unless-stopped
+    environment:
+      AGENT_MODE: rca
+      AGENT_DATABASE_URL: postgresql+psycopg://agent:agent@postgres:5432/agent
+      LOKI_URL: http://loki:3100
+      TEMPO_URL: http://tempo:3200
+      PROMETHEUS_URL: http://prometheus:9090
+    volumes:
+      # code_investigation's read-only git/code tools need the demo repo at
+      # the same relative path repo_registry.py resolves on the host
+      # (../demo-payment-service from config/services.yaml's directory).
+      - ../demo-payment-service:/demo-payment-service:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   loki_data:

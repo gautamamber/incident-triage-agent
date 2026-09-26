@@ -2,6 +2,7 @@ from app.agents.prompts.classify import CLASSIFY_SYSTEM, build_classify_prompt
 from app.agents.state import InvestigationState
 from app.llm import get_chat_model
 from app.models.rca import Category
+from app.security.budget import extract_tokens
 
 # Keys are SHORT exception class names (`type(exc).__name__`), not fully-
 # qualified paths — confirmed against real data (S03): OTel's logging
@@ -33,7 +34,10 @@ def classify(state: InvestigationState) -> dict:
         response = model.invoke([("system", CLASSIFY_SYSTEM), ("human", prompt)])
         text = str(response.content).strip().upper()
         category = text if text in Category.__members__ else Category.UNKNOWN.value
-        return {"classification": {"category": category, "method": "llm"}}
+        return {
+            "classification": {"category": category, "method": "llm"},
+            "token_usage": extract_tokens(response),
+        }
     except Exception as exc:
         return {
             "classification": {"category": Category.UNKNOWN.value, "method": "llm"},
